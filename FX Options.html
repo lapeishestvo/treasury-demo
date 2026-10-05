@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FX Options - Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/ColHeader.js"></script>
+<script src="components/TableCell.js"></script>
+<script src="components/Chip.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FilterDropdown.js"></script>
+<script src="components/SideMenu.js?v=positions-1"></script>
+<script src="components/Island.js"></script>
+<script src="components/UiPrimitives.js"></script>
+<script src="components/FxOptionTableCell.js"></script>
+<script src="components/TableLayout.js"></script>
+<script src="components/ToolbarIcons.js"></script>
+<script src="components/SearchBar.js"></script>
+<script src="components/TableExtras.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: none; }
+.scrollable::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollable::-webkit-scrollbar-track { background: transparent; }
+.scrollable::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.scrollable:hover { scrollbar-width: thin; scrollbar-color: var(--aura-border-tertiary) transparent; }
+.scrollable:hover::-webkit-scrollbar-thumb { background: var(--aura-border-tertiary); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const T = AuraTokens;
+const STORAGE_KEY = 'aura_fx_option_trades';
+const CURRENT_USER = 'Sergio Chavez';
+const MIN_TABLE_W = 1600;
+
+const STATUS_LABELS = {
+  draft: 'Draft',
+  pending_approval: 'Pending approval',
+  pending_mo_reconciliation: 'Pending reconcillation',
+  pending_settlement: 'Pending settlement',
+  pending_settlement_approval: 'Pending settlement approval',
+  live: 'Live',
+  pending_exercise_decision: 'Pending exercise decision',
+  settling: 'Settling',
+  settled: 'Settled',
+  returned_to_fo: 'Returned',
+  returned_to_bo: 'Settlement returned',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+  expired: 'Expired',
+  exception: 'Exception',
+};
+
+const STATUS_VARIANTS = {
+  'Draft': 'neutral-secondary',
+  'Pending approval': 'warning-secondary',
+  'Pending reconcillation': 'accent-secondary',
+  'Pending settlement': 'accent-secondary',
+  'Pending settlement approval': 'warning-secondary',
+  'Live': 'accent-secondary',
+  'Pending exercise decision': 'accent-secondary',
+  'Settling': 'accent-secondary',
+  'Settled': 'success-secondary',
+  'Returned': 'error-tertiary',
+  'Settlement returned': 'error-tertiary',
+  'Declined': 'error-secondary',
+  'Cancelled': 'neutral-secondary',
+  'Expired': 'neutral-secondary',
+  'Exception': 'error-secondary',
+};
+
+const STATUS_FILTER_OPTIONS = [
+  'Draft',
+  'Pending approval',
+  'Pending reconcillation',
+  'Pending settlement',
+  'Pending settlement approval',
+  'Live',
+  'Pending exercise decision',
+  'Settling',
+  'Settled',
+  'Returned',
+  'Settlement returned',
+  'Declined',
+  'Cancelled',
+  'Expired',
+  'Exception',
+];
+
+const ASSET_OPTIONS = ['USD/MXN', 'EUR/USD', 'EUR/MXN'];
+const COUNTERPARTY_OPTIONS = ['Banco Base', 'CitiFX', 'BBVA', 'Santander', 'Banorte'];
+const FIXING_SOURCE_OPTIONS = ['BANXICO_FIX', 'BLOOMBERG_BFIX', 'WMR_REUTERS'];
+const AUTHORS = ['Sergio Chavez', 'Magali Ruiz', 'Fabiola Lopez', 'Miguel Torres', 'Ana Cruz'];
+const ASSIGNED = ['Sergio Chavez', 'MO Desk', 'BO Maker', 'BO Checker', 'Management'];
+
+const DEFAULT_VISIBLE_COLUMNS = [
+  'optionId',
+  'instrument',
+  'counterparty',
+  'asset',
+  'optionType',
+  'side',
+  'notional',
+  'notionalCurrency',
+  'strikePrice',
+  'premium',
+  'premiumCurrency',
+  'tradeDate',
+  'maturityDate',
+  'status',
+  'fixingSource',
+];
+
+const ALL_COLUMNS = [
+  { key: 'optionId', label: 'Option id', width: 116, sortable: true, align: 'right' },
+  { key: 'instrument', label: 'Instrument', width: 220, sortable: true },
+  { key: 'counterparty', label: 'Counterparty', width: 156, sortable: true },
+  { key: 'asset', label: 'Asset', width: 116, sortable: true },
+  { key: 'optionType', label: 'Option type', width: 132, sortable: true },
+  { key: 'side', label: 'Side', width: 88, sortable: true },
+  { key: 'notional', label: 'Notional', width: 148, sortable: true, align: 'right' },
+  { key: 'notionalCurrency', label: 'Notional currency', width: 176, sortable: true },
+  { key: 'strikePrice', label: 'Strike price', width: 140, sortable: true, align: 'right' },
+  { key: 'premium', label: 'Premium', width: 132, sortable: true, align: 'right' },
+  { key: 'premiumCurrency', label: 'Premium currency', width: 176, sortable: true },
+  { key: 'tradeDate', label: 'Trade date', width: 144, sortable: true },
+  { key: 'maturityDate', label: 'Maturity date', width: 152, sortable: true },
+  { key: 'status', label: 'Status', width: 240, sortable: false },
+  { key: 'fixingSource', label: 'Fixing source', width: 172, sortable: true },
+  { key: 'assigned', label: 'Assigned', width: 156, sortable: true },
+  { key: 'createdBy', label: 'Created by', width: 164, sortable: true },
+  { key: 'settlementType', label: 'Settlement type', width: 168, sortable: true },
+  { key: 'settlementDate', label: 'Settlement date', width: 156, sortable: true },
+  { key: 'exerciseSettlementDate', label: 'Exercise settlement date', width: 220, sortable: true },
+  { key: 'observedRate', label: 'Observed rate', width: 132, sortable: true, align: 'right' },
+  { key: 'uti', label: 'UTI', width: 156, sortable: true },
+  { key: 'keyTrxConfirmation', label: 'Key trx confirmation', width: 196, sortable: true },
+  { key: 'createdAt', label: 'Created at', width: 176, sortable: true },
+  { key: 'lastModifiedAt', label: 'Last modified at', width: 176, sortable: true },
+];
+
+function seedInstrument(row) {
+  const typeShort = row.optionType === 'Call' ? 'CALL' : 'PUT';
+  const assetCode = String(row.asset || '').replace('/', '');
+  return typeShort + '_' + assetCode + '_' + String(row.maturityDate || '').slice(2).replace(/-/g, '') + '_V' + row.optionId;
+}
+
+function parseDateValue(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return 0;
+  return new Date(match[1] + '-' + match[2] + '-' + match[3]).getTime();
+}
+
+function formatNumber(value, decimals) {
+  const parsed = Number(String(value || '0').replace(/,/g, ''));
+  if (!Number.isFinite(parsed)) return String(value || '');
+  return parsed.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function buildSeedRows() {
+  const statuses = [
+    'draft',
+    'pending_approval',
+    'pending_mo_reconciliation',
+    'pending_settlement',
+    'pending_settlement_approval',
+    'live',
+    'pending_exercise_decision',
+    'settling',
+    'settled',
+    'returned_to_fo',
+    'returned_to_bo',
+    'declined',
+    'cancelled',
+    'expired',
+    'exception',
+  ];
+  const baseDates = ['2026-07-08', '2026-07-07', '2026-07-06', '2026-07-05', '2026-07-04', '2026-07-03'];
+  const rows = [];
+
+  for (let index = 0; index < 30; index += 1) {
+    const tradeDate = baseDates[index % baseDates.length];
+    const maturityDate = ['2026-08-15', '2026-09-10', '2026-09-24', '2026-10-07', '2026-10-21'][index % 5];
+    const status = statuses[index % statuses.length];
+    const asset = ASSET_OPTIONS[index % ASSET_OPTIONS.length];
+    const optionType = index % 2 === 0 ? 'Call' : 'Put';
+    const settlementType = index % 3 === 0 ? 'Cash' : 'Physical';
+    const settlementDate = tradeDate;
+    const exerciseSettlementDate = status === 'settling' || status === 'settled' ? '2026-09-12' : '';
+    const row = {
+      optionId: String(300000 + index + 1),
+      asset,
+      optionType,
+      side: 'Buy',
+      counterparty: COUNTERPARTY_OPTIONS[index % COUNTERPARTY_OPTIONS.length],
+      notional: String(30000000 + index * 1750000),
+      notionalCurrency: asset.split('/')[0],
+      strikePrice: (17.12 + index * 0.0413).toFixed(4),
+      premium: String(145000 + index * 3200),
+      premiumCurrency: asset.split('/')[0],
+      tradeDate,
+      maturityDate,
+      settlementDate,
+      status,
+      fixingSource: FIXING_SOURCE_OPTIONS[index % FIXING_SOURCE_OPTIONS.length],
+      assigned: ASSIGNED[index % ASSIGNED.length],
+      createdBy: AUTHORS[index % AUTHORS.length],
+      settlementType,
+      cashSettlementCurrency: settlementType === 'Cash' ? asset.split('/')[1] : '',
+      exerciseSettlementDate,
+      observedRate: status === 'pending_exercise_decision' || status === 'settling' || status === 'settled' ? (17.84 + index * 0.027).toFixed(4) : '',
+      objective: 'Treasury hedge',
+      uti: 'MX-FXO-' + (300000 + index + 1),
+      keyTrxConfirmation: 'CITI-FX-' + (20260700 + index + 1),
+      createdAt: tradeDate + ' 14:3' + (index % 10),
+      lastModifiedAt: tradeDate + ' 16:1' + (index % 10),
+      valmerStatus: index % 4 === 0 ? 'REGISTERED' : index % 4 === 1 ? 'LAYOUT_SENT' : index % 4 === 2 ? 'NOT_REGISTERED' : 'ERROR',
+    };
+    row.instrument = seedInstrument(row);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+const SEED_ROWS = buildSeedRows();
+
+function normalizeDateString(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const legacy = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (legacy) return legacy[3] + '-' + legacy[2] + '-' + legacy[1];
+  return raw;
+}
+
+function normalizeFxRow(row) {
+  if (!row || typeof row !== 'object') return row;
+  const next = { ...row };
+  if (!next.optionId && next.ticket) next.optionId = String(next.ticket);
+  if (!next.tradeDate) next.tradeDate = normalizeDateString(next.created) || '2026-07-08';
+  if (!next.maturityDate) next.maturityDate = next.tradeDate;
+  next.tradeDate = normalizeDateString(next.tradeDate);
+  next.maturityDate = normalizeDateString(next.maturityDate);
+  next.settlementDate = normalizeDateString(next.settlementDate || next.tradeDate);
+  next.exerciseSettlementDate = normalizeDateString(next.exerciseSettlementDate);
+  next.status = next.status || 'draft';
+  next.instrument = next.instrument || seedInstrument(next);
+  next.side = 'Buy';
+  if (!next.assigned) next.assigned = CURRENT_USER;
+  if (!next.createdBy) next.createdBy = CURRENT_USER;
+  return next;
+}
+
+function loadRows() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const normalizedSeeds = SEED_ROWS.map(normalizeFxRow);
+    if (!Array.isArray(stored) || stored.length === 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedSeeds));
+      return normalizedSeeds;
+    }
+    const normalizedStored = stored.map(normalizeFxRow);
+    const existingIds = new Set(normalizedStored.map((row) => row.optionId));
+    const merged = normalizedStored.concat(normalizedSeeds.filter((row) => !existingIds.has(row.optionId)));
+    if (JSON.stringify(stored) !== JSON.stringify(merged)) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    }
+    return merged;
+  } catch {
+    const normalizedSeeds = SEED_ROWS.map(normalizeFxRow);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedSeeds));
+    return normalizedSeeds;
+  }
+}
+
+function saveRows(rows) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(rows.map(normalizeFxRow)));
+}
+
+function getModeForStatus(status) {
+  if (status === 'draft' || status === 'returned_to_fo') return 'edit';
+  if (status === 'pending_approval') return 'approval_detail';
+  if (status === 'pending_mo_reconciliation') return 'reconciliation_detail';
+  if (status === 'pending_settlement' || status === 'returned_to_bo') return 'premium_form';
+  if (status === 'pending_settlement_approval') return 'premium_approval_detail';
+  if (status === 'live') return 'live_detail';
+  if (status === 'pending_exercise_decision') return 'exercise_form';
+  if (status === 'settling') return 'settling_form';
+  return 'settled_detail';
+}
+
+function openTrade(row) {
+  const params = new URLSearchParams({
+    mode: getModeForStatus(row.status),
+    optionId: row.optionId,
+    status: row.status,
+  });
+  window.location.href = 'FX Option.html?' + params.toString();
+}
+
+function App() {
+  const [sortState, setSortState] = React.useState({ key: 'optionId', dir: 'desc' });
+  const [searchValue, setSearchValue] = React.useState('');
+  const [selectedStatuses, setSelectedStatuses] = React.useState([]);
+  const [selectedColumnKeys, setSelectedColumnKeys] = React.useState(DEFAULT_VISIBLE_COLUMNS);
+  const [onlyMyPending, setOnlyMyPending] = React.useState(false);
+  const [onlyAssignedToMe, setOnlyAssignedToMe] = React.useState(false);
+  const [statusesOpen, setStatusesOpen] = React.useState(false);
+  const [columnsOpen, setColumnsOpen] = React.useState(false);
+
+  const statusesAnchorRef = React.useRef(null);
+  const columnsAnchorRef = React.useRef(null);
+
+  const allRows = React.useMemo(() => loadRows(), []);
+
+  const filteredBySearch = React.useMemo(() => {
+    const query = searchValue.trim().toLowerCase();
+    if (!query) return allRows;
+    return allRows.filter((row) => [row.instrument, row.counterparty].some((value) => String(value || '').toLowerCase().includes(query)));
+  }, [allRows, searchValue]);
+
+  const filteredRows = React.useMemo(() => {
+    return filteredBySearch.filter((row) => {
+      const statusLabel = STATUS_LABELS[row.status];
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(statusLabel)) return false;
+      if (onlyMyPending && !String(row.status || '').startsWith('pending_')) return false;
+      if (onlyAssignedToMe && row.assigned !== CURRENT_USER) return false;
+      return true;
+    });
+  }, [filteredBySearch, selectedStatuses, onlyMyPending, onlyAssignedToMe]);
+
+  const sortedRows = React.useMemo(() => {
+    const rows = filteredRows.slice();
+    rows.sort((left, right) => {
+      const key = sortState.key;
+      let compare = 0;
+      if (['optionId', 'notional', 'strikePrice', 'premium', 'observedRate'].includes(key)) {
+        compare = Number(String(left[key] || '0').replace(/,/g, '')) - Number(String(right[key] || '0').replace(/,/g, ''));
+      } else if (['tradeDate', 'maturityDate', 'settlementDate', 'exerciseSettlementDate'].includes(key)) {
+        compare = parseDateValue(left[key]) - parseDateValue(right[key]);
+      } else {
+        compare = String(left[key] || '').localeCompare(String(right[key] || ''));
+      }
+      return sortState.dir === 'asc' ? compare : -compare;
+    });
+    return rows;
+  }, [filteredRows, sortState]);
+
+  const visibleColumns = React.useMemo(() => {
+    const selectedSet = new Set(selectedColumnKeys);
+    return ALL_COLUMNS.filter((column) => selectedSet.has(column.key));
+  }, [selectedColumnKeys]);
+
+  const tableWidth = React.useMemo(() => {
+    const total = visibleColumns.reduce((sum, column) => sum + column.width, ROW_NUMBER_SLOT_WIDTH);
+    return Math.max(total, MIN_TABLE_W);
+  }, [visibleColumns]);
+
+  function toggleColumn(key) {
+    setSelectedColumnKeys((prev) => {
+      if (prev.includes(key)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((item) => item !== key);
+      }
+      const orderMap = new Map(ALL_COLUMNS.map((column, index) => [column.key, index]));
+      return prev.concat(key).sort((left, right) => orderMap.get(left) - orderMap.get(right));
+    });
+  }
+
+  function setColumnKeys(nextKeys) {
+    if (!Array.isArray(nextKeys) || nextKeys.length === 0) {
+      setSelectedColumnKeys(DEFAULT_VISIBLE_COLUMNS);
+      return;
+    }
+    const orderMap = new Map(ALL_COLUMNS.map((column, index) => [column.key, index]));
+    setSelectedColumnKeys(nextKeys.filter((key) => orderMap.has(key)).sort((left, right) => orderMap.get(left) - orderMap.get(right)));
+  }
+
+  
+
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'FX Options' }]} user="treasury.demo@plata.local">
+      <PageWorkspace gap={T.spacing[2]} padding={T.spacing[5]}>
+        <SideMenu activeSectionKey="trades" activeItemKey="fx" />
+        <StackColumn flex={1} minWidth={MIN_TABLE_W} minHeight={0} gap={T.spacing[2]}>
+          <Island style={{ minWidth: MIN_TABLE_W }} gap={T.spacing.base} background={T.colors.bgNeutralBase}>
+            <ToolbarTile minHeight={72} gap={8}>
+              <PageTitle label="FX Options" />
+              <FlexSpacer />
+              <SearchBar value={searchValue} onChange={setSearchValue} />
+              <Chip
+                label="Download"
+                tone="secondary"
+                iconElement={<DownloadIcon16 />}
+                onClick={() => {
+                  const header = visibleColumns.map((column) => column.label);
+                  const lines = sortedRows.map((row) => visibleColumns.map((column) => {
+                    const raw = column.key === 'status' ? STATUS_LABELS[row.status] : row[column.key];
+                    const value = String(raw == null ? '' : raw);
+                    return '"' + value.replace(/"/g, '""') + '"';
+                  }).join(','));
+                  const csv = [header.join(','), ...lines].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'fx-options.csv';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                }}
+              />
+              <PrimaryActionButton
+                label="Create new trade"
+                icon={<PlusIcon16 />}
+                onClick={() => { window.location.href = 'FX Option.html?mode=edit'; }}
+              />
+            </ToolbarTile>
+
+            <ToolbarTile minHeight={80} gap={8}>
+              <RelativeInline innerRef={statusesAnchorRef}>
+                <Chip
+                  label="Statuses"
+                  active={selectedStatuses.length > 0}
+                  showChevron={true}
+                  onClick={() => setStatusesOpen((value) => !value)}
+                />
+                {statusesOpen ? (
+                  <FilterDropdown
+                    width={336}
+                    anchorRef={statusesAnchorRef}
+                    options={STATUS_FILTER_OPTIONS}
+                    selectedKeys={selectedStatuses}
+                    onSetSelectedKeys={setSelectedStatuses}
+                    onToggleKey={(value) => {
+                      setSelectedStatuses((prev) => prev.includes(value) ? prev.filter((item) => item !== value) : prev.concat(value));
+                    }}
+                    onClose={() => setStatusesOpen(false)}
+                    getOptionKey={(option) => option}
+                    getOptionLabel={(option) => option}
+                    preferredAlign="end"
+                    preferredSide="bottom"
+                    gap={8}
+                    margin={8}
+                    itemMinHeight={48}
+                  />
+                ) : null}
+              </RelativeInline>
+              <Chip label="My pending trades" active={onlyMyPending} onClick={() => setOnlyMyPending((value) => !value)} />
+              <Chip label="Assigned to me" active={onlyAssignedToMe} onClick={() => setOnlyAssignedToMe((value) => !value)} />
+              <FlexSpacer />
+              <RelativeInline innerRef={columnsAnchorRef}>
+                <Chip label="Columns" iconElement={<ColumnsIcon16 />} onClick={() => setColumnsOpen((value) => !value)} />
+                {columnsOpen ? (
+                  <FilterDropdown
+                    width={280}
+                    anchorRef={columnsAnchorRef}
+                    options={ALL_COLUMNS}
+                    selectedKeys={selectedColumnKeys}
+                    onSetSelectedKeys={setColumnKeys}
+                    onToggleKey={toggleColumn}
+                    onClose={() => setColumnsOpen(false)}
+                    getOptionKey={(option) => option.key}
+                    getOptionLabel={(option) => option.label}
+                    preferredAlign="end"
+                    preferredSide="bottom"
+                    gap={8}
+                    margin={8}
+                    itemMinHeight={48}
+                  />
+                ) : null}
+              </RelativeInline>
+            </ToolbarTile>
+          </Island>
+
+          <Island style={{ minWidth: MIN_TABLE_W, flex: 1, minHeight: 0 }}>
+            <ScrollColumn x="auto" y="auto">
+              <TableContent minWidth={tableWidth}>
+                <StickyTableHeader>
+                  <RowNumberHeaderCell />
+                  {visibleColumns.map((column, index) => (
+                    <ColHeader
+                      key={column.key}
+                      label={column.label}
+                      width={column.width}
+                      sortable={column.sortable}
+                      sorted={sortState.key === column.key}
+                      direction={sortState.dir}
+                      onClick={() => {
+                        if (!column.sortable) return;
+                        setSortState((prev) => prev.key === column.key ? { key: column.key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key: column.key, dir: 'desc' });
+                      }}
+                      first={index === 0}
+                      last={index === visibleColumns.length - 1}
+                    />
+                  ))}
+                </StickyTableHeader>
+                {sortedRows.map((row, index) => (
+                  <InteractiveRow key={row.optionId} onClick={() => openTrade(row)} hoverBg={T.colors.bgNeutralBase}>
+                    <RowNumberCell value={index + 1} />
+                    {visibleColumns.map((column, columnIndex) => React.createElement(FxOptionTableCell, {
+  STATUS_LABELS: STATUS_LABELS,
+  STATUS_VARIANTS: STATUS_VARIANTS,
+  formatNumber: formatNumber,
+  column: column,
+  row: row,
+  index: columnIndex,
+  last: columnIndex === visibleColumns.length - 1,
+  key: column.key
+}))}
+                  </InteractiveRow>
+                ))}
+              </TableContent>
+            </ScrollColumn>
+          </Island>
+        </StackColumn>
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

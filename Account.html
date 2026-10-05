@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account — Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FormPageHeader.js"></script>
+<script src="components/AuraStepper.js"></script>
+<script src="components/Island.js"></script>
+<script src="components/SectionHeader.js"></script>
+<script src="components/Fieldset.js"></script>
+<script src="components/ReviewRow.js"></script>
+<script src="components/ButtonStack.js"></script>
+<script src="components/SideMenu.js?v=positions-1"></script>
+<script src="components/InputField.js"></script>
+<script src="components/SelectField.js"></script>
+<script src="components/TextareaField.js"></script>
+<script src="components/FormSection.js"></script>
+<script src="components/ViewSection.js"></script>
+<script src="components/UiPrimitives.js"></script>
+<script src="components/AccountForms.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: none; }
+.scrollable::-webkit-scrollbar { display: none; }
+input, textarea { font-family: var(--aura-font-family, 'Inter', sans-serif); }
+@keyframes tile-flash {
+  0%   { background-color: var(--aura-bg-accent-light); }
+  35%  { background-color: var(--aura-bg-accent-light); }
+  100% { background-color: var(--aura-bg-neutral-primary); }
+}
+.tile-flash {
+  animation: tile-flash 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const T = AuraTokens;
+
+const STATUS_VARIANT = {
+  'Active':               'success-secondary',
+  'Draft':                'neutral-secondary',
+  'Waiting for approval': 'warning-secondary',
+  'Declined':             'error-secondary',
+  'Superseded':           'neutral-tertiary',
+  'Inactive':             'neutral-tertiary',
+  'Archived':             'neutral-tertiary',
+  'Trashed':              'neutral-tertiary',
+};
+
+const STEPPER_W = 240;
+const CONTENT_W = 520;
+const OUTER_PAD = 20;
+
+const STEPS = [
+  { label: 'Main info',         anchor: 'section-main'  },
+  { label: 'Owner & Custodian', anchor: 'section-owner' },
+];
+
+function getPageMode() {
+  const url = new URL(window.location.href);
+  return url.searchParams.get('mode') === 'create' ? 'create' : 'view';
+}
+
+function AccountCreateFlow() {
+  const [mode, setMode] = React.useState('edit');
+  const [form, setForm] = React.useState({
+    number: '', name: '', description: '', type: '', currency: 'MXN',
+    validFrom: '', validTo: '', owner: '', custodian: '', bank: '',
+  });
+  const [mainExpanded, setMainExpanded] = React.useState(true);
+  const [ownerExpanded, setOwnerExpanded] = React.useState(true);
+  const [flashKeys, setFlashKeys] = React.useState({});
+  const scrollRef = React.useRef(null);
+  const scrollTarget = React.useRef(null);
+  const savedTop = React.useRef(null);
+
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    if (savedTop.current !== null) {
+      container.scrollTop = savedTop.current;
+      savedTop.current = null;
+    }
+    if (scrollTarget.current) {
+      const el = document.getElementById(scrollTarget.current);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        const contRect = container.getBoundingClientRect();
+        const nextTop = Math.max(0, container.scrollTop + (elRect.top - contRect.top) - 8);
+        container.scrollTo({ top: nextTop, behavior: 'smooth' });
+      }
+      scrollTarget.current = null;
+    }
+  });
+
+  const onBack = () => window.location.href = 'Accounts.html';
+  const set = key => val => setForm(f => ({ ...f, [key]: val }));
+
+  const handleStepClick = (anchor) => {
+    if (scrollRef.current) savedTop.current = scrollRef.current.scrollTop;
+    scrollTarget.current = anchor;
+    if (anchor === 'section-main') setMainExpanded(true);
+    if (anchor === 'section-owner') setOwnerExpanded(true);
+    setFlashKeys(prev => ({ ...prev, [anchor]: (prev[anchor] || 0) + 1 }));
+  };
+
+  const onSubmit = () => {
+    const accounts = JSON.parse(localStorage.getItem('aura_accounts') || '[]');
+    const newAccount = {
+      id: Date.now(),
+      name: form.name || 'Unnamed Account',
+      type: form.type || '—',
+      owner: form.owner || '—',
+      custodian: form.custodian || '—',
+      status: 'Waiting for approval',
+      from: form.validFrom || '—',
+      to: form.validTo || '—',
+      number: form.number || '—',
+      description: form.description || '—',
+      currency: form.currency || 'MXN',
+    };
+    accounts.unshift(newAccount);
+    localStorage.setItem('aura_accounts', JSON.stringify(accounts));
+    window.location.href = 'Accounts.html';
+  };
+
+  const mainRows = [
+    { label: 'Number', value: form.number || '—' },
+    { label: 'Name', value: form.name || '—' },
+    { label: 'Description', value: form.description || '—' },
+    { label: 'Type', value: form.type || '—' },
+    { label: 'Currency', value: form.currency },
+    { label: 'Validity', value: form.validFrom ? `${form.validFrom} – ${form.validTo || 'Indefinite'}` : '—' },
+  ];
+  const ownerRows = [
+    { label: 'Owner', value: form.owner || '—' },
+    { label: 'Custodian', value: form.custodian || '—' },
+    { label: 'Bank', value: form.bank || '—' },
+  ];
+
+  const leftSections = mode === 'edit' ? (
+    <AccountForm mainExpanded={mainExpanded} setMainExpanded={setMainExpanded} flashKeys={flashKeys} form={form} set={set} ownerExpanded={ownerExpanded} setOwnerExpanded={setOwnerExpanded} />
+  ) : (
+    <AccountReview mainRows={mainRows} flashKeys={flashKeys} ownerRows={ownerRows} />
+  );
+
+  const leftButtons = mode === 'edit'
+    ? <ButtonStack secondary={{ label: 'Save draft', variant: 'secondary', onClick: onBack }} primary={{ label: 'Next', variant: 'primary', onClick: () => setMode('review') }} />
+    : <ButtonStack secondary={{ label: 'Back to edit', variant: 'secondary', onClick: () => setMode('edit') }} primary={{ label: 'Submit for approval', variant: 'primary', onClick: onSubmit }} />;
+
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Directories' }, { label: 'Accounts', href: 'Accounts.html' }, { label: 'New account' }]} user="treasury.demo@plata.local">
+      <PageWorkspace padding={OUTER_PAD}>
+        <FlowStageLayout
+          navWidth={STEPPER_W}
+          mainWidth={CONTENT_W}
+          navAlignSelf="flex-start"
+          nav={
+            <AuraStepper
+              steps={STEPS}
+              onStepClick={handleStepClick}
+              hideNumbers={true}
+              fillHeight={true}
+              disableAutoScroll={true}
+            />
+          }
+          main={
+            <IslandColumn
+              scrollChildren={leftSections}
+              buttons={leftButtons}
+              colRef={scrollRef}
+              fillMode={mode === 'edit' ? 'filler-after-last' : 'stretch-last'}
+            />
+          }
+          header={(totalWidth) => (
+            <FormPageHeader
+              title="New account"
+              status={mode === 'review' ? 'Draft' : undefined}
+              statusVariant="neutral-secondary"
+              onBack={onBack}
+              width={totalWidth}
+            />
+          )}
+        />
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+function AccountViewFlow() {
+  const account = React.useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('aura_account_view') || 'null'); } catch { return null; }
+  }, []);
+  const [comment, setComment] = React.useState('');
+  const [flashKeys, setFlashKeys] = React.useState({});
+  const scrollRef = React.useRef(null);
+  const scrollTarget = React.useRef(null);
+  const savedTop = React.useRef(null);
+
+  const onBack = () => window.location.href = 'Accounts.html';
+
+  const updateStatus = (newStatus) => {
+    const accounts = JSON.parse(localStorage.getItem('aura_accounts') || '[]');
+    const idx = accounts.findIndex(a => a.id === account.id);
+    if (idx !== -1) { accounts[idx].status = newStatus; localStorage.setItem('aura_accounts', JSON.stringify(accounts)); }
+    const updated = { ...account, status: newStatus };
+    localStorage.setItem('aura_account_view', JSON.stringify(updated));
+    window.location.href = 'Accounts.html';
+  };
+
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    if (savedTop.current !== null) {
+      container.scrollTop = savedTop.current;
+      savedTop.current = null;
+    }
+    if (scrollTarget.current) {
+      const el = document.getElementById(scrollTarget.current);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        const contRect = container.getBoundingClientRect();
+        const nextTop = Math.max(0, container.scrollTop + (elRect.top - contRect.top) - 8);
+        container.scrollTo({ top: nextTop, behavior: 'smooth' });
+      }
+      scrollTarget.current = null;
+    }
+  });
+
+  if (!account) {
+    return (
+      <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Directories' }, { label: 'Accounts', href: 'Accounts.html' }]} user="treasury.demo@plata.local">
+        <FillRow>
+          <EmptyState label="Account not found" />
+        </FillRow>
+      </PageScreen>
+    );
+  }
+
+  const handleStepClick = (anchor) => {
+    if (scrollRef.current) savedTop.current = scrollRef.current.scrollTop;
+    scrollTarget.current = anchor;
+    setFlashKeys(prev => ({ ...prev, [anchor]: (prev[anchor] || 0) + 1 }));
+  };
+
+  const isWaiting = account.status === 'Waiting for approval';
+  const mainRows = [
+    { label: 'Number', value: account.number || '—' },
+    { label: 'Name', value: account.name || '—' },
+    { label: 'Description', value: account.description || '—' },
+    { label: 'Type', value: account.type || '—' },
+    { label: 'Currency', value: account.currency || '—' },
+    { label: 'Validity', value: account.from && account.from !== '—' ? `${account.from} – ${account.to || 'Indefinite'}` : '—' },
+  ];
+  const ownerRows = [
+    { label: 'Owner', value: account.owner || '—' },
+    { label: 'Custodian', value: account.custodian || '—' },
+  ];
+
+  return (
+    <PageScreen
+      breadcrumbs={[{ label: 'Treasury' }, { label: 'Directories' }, { label: 'Accounts', href: 'Accounts.html' }, { label: account.name }]}
+      user="treasury.demo@plata.local"
+    >
+      <PageWorkspace padding={OUTER_PAD}>
+        <FlowStageLayout
+          navWidth={STEPPER_W}
+          mainWidth={CONTENT_W}
+          sideWidth={isWaiting ? CONTENT_W : undefined}
+          navAlignSelf="flex-start"
+          nav={
+            <AuraStepper
+              steps={STEPS}
+              onStepClick={handleStepClick}
+              hideNumbers={true}
+              fillHeight={true}
+              disableAutoScroll={true}
+            />
+          }
+          main={
+            <IslandColumn
+              colRef={scrollRef}
+              fillMode="stretch-last"
+              scrollChildren={
+                <>
+                  <ViewSection id="section-main" title="Main info" rows={mainRows} flashKey={flashKeys['section-main']} />
+                  <ViewSection id="section-owner" title="Owner & Custodian" rows={ownerRows} flashKey={flashKeys['section-owner']} stretch={true} />
+                </>
+              }
+            />
+          }
+          side={isWaiting ? (
+            <AccountApprovalPanel comment={comment} setComment={setComment} updateStatus={updateStatus} />
+          ) : null}
+          header={(totalWidth) => (
+            <FormPageHeader
+              title={account.name}
+              status={account.status}
+              statusVariant={STATUS_VARIANT[account.status] || 'neutral-secondary'}
+              onBack={onBack}
+              width={totalWidth}
+            />
+          )}
+        />
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+function App() {
+  return getPageMode() === 'create'
+    ? <AccountCreateFlow />
+    : <AccountViewFlow />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Trades — Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<!-- Shared components — plain JS, loaded synchronously before Babel -->
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/ColHeader.js"></script>
+<script src="components/TableCell.js"></script>
+<script src="components/Chip.js"></script>
+<script src="components/CheckboxControl.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FilterDropdown.js"></script>
+<script src="components/SideMenu.js?v=positions-1"></script>
+<script src="components/Island.js"></script>
+<script src="components/UiPrimitives.js"></script>
+<script src="components/SecurityTradeTableCell.js?v=trade-portfolio-1"></script>
+<script src="PortfolioData.js?v=lots-1"></script>
+<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
+<script src="HoldingsLedger.js?v=lots-3"></script>
+<script src="TradeStore.js?v=lots-1"></script>
+<script src="components/TableLayout.js"></script>
+<script src="components/ToolbarIcons.js"></script>
+<script src="components/SearchBar.js"></script>
+<script src="components/TableExtras.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: none; }
+.scrollable::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollable::-webkit-scrollbar-track { background: transparent; }
+.scrollable::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; transition: background 0.2s; }
+.scrollable:hover { scrollbar-width: thin; scrollbar-color: var(--aura-border-tertiary) transparent; }
+.scrollable:hover::-webkit-scrollbar-thumb { background: var(--aura-border-tertiary); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const T = AuraTokens;
+
+const TRADE_TYPE_VARIANT  = { buy: 'success-secondary', sell: 'warning-secondary' };
+const TRADE_STATUS_VARIANT = {
+  'Draft': 'neutral-secondary',
+  'Pending approval': 'warning-secondary',
+  'Pending reconcillation': 'accent-secondary',
+  'Pending settlement': 'accent-secondary',
+  'Counterparty confirmed': 'accent-secondary',
+  'Settling': 'accent-secondary',
+  'Pending settlement approval': 'warning-secondary',
+  'Returned': 'error-tertiary',
+  'Settlement returned': 'error-tertiary',
+  'Settled': 'success-secondary',
+  'Declined': 'error-secondary',
+  'Cancelled': 'neutral-secondary',
+};
+const STATUS_LABELS = {
+  draft: 'Draft',
+  pending_approval: 'Pending approval',
+  pending_mo_reconciliation: 'Pending reconcillation',
+  pending_settlement: 'Pending settlement',
+  counterparty_confirmed: 'Counterparty confirmed',
+  settling: 'Settling',
+  pending_mo_settlement_confirmation: 'Pending settlement approval',
+  returned_to_fo: 'Returned',
+  returned_to_bo: 'Settlement returned',
+  settled: 'Settled',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+};
+const STATUS_FILTER_OPTIONS = ['Draft', 'Pending approval', 'Pending reconcillation', 'Pending settlement', 'Counterparty confirmed', 'Settling', 'Pending settlement approval', 'Settled', 'Returned', 'Settlement returned', 'Declined', 'Cancelled'];
+function getAllTradeRows() { return TradeStore.list(); }
+
+function getModeForRow(row) {
+  if (row.status === 'pending_approval') return 'approval_detail';
+  if (row.status === 'pending_mo_reconciliation') return 'mo_reconciliation_detail';
+  if (row.status === 'pending_settlement') return 'counterparty_form';
+  if (row.status === 'counterparty_confirmed') return 'settlement_form';
+  if (row.status === 'settling') return 'bo_approval_detail';
+  if (row.status === 'pending_mo_settlement_confirmation') return 'mo_settlement_confirmation_detail';
+  if (row.status === 'returned_to_fo') return 'edit';
+  if (row.status === 'returned_to_bo') return 'settlement_form';
+  if (row.status === 'settled' || row.status === 'declined' || row.status === 'cancelled') return 'settled_detail';
+  if (row.mode) return row.mode;
+  return 'edit';
+}
+
+function isReadonlyRow(row) {
+  if (row.readonly === true) return true;
+  return row.status === 'settled' || row.status === 'declined' || row.status === 'cancelled';
+}
+
+const FILTER_CHIPS  = ['Statuses', 'Created', 'Author'];
+const CHEVRON_CHIPS = new Set(['Statuses', 'Created', 'Author']);
+
+const COLS = [
+  { key: 'instrument',   label: 'Instrument',   dropdownLabel: 'Instrument',              width: 172, sortable: false },
+  { key: 'portfolioName', label: 'Portfolio', width: 184, sortable: false },
+  { key: 'counterparty', label: 'Counterparty', dropdownLabel: 'Counterparty',            width: 144, sortable: false },
+  { key: 'type',         label: 'Type',         dropdownLabel: 'Trade type',              width: 88,  sortable: true  },
+  { key: 'price',        label: 'Price',        dropdownLabel: 'Price',                   width: 128, sortable: true,  align: 'right' },
+  { key: 'qty',          label: 'Quantity',     dropdownLabel: 'Quantity',                width: 136, sortable: true,  align: 'right' },
+  { key: 'total',        label: 'Total',        dropdownLabel: 'Total amount',            width: 160, sortable: true,  align: 'right' },
+  { key: 'status',       label: 'Status',       dropdownLabel: 'Status',                  width: 264, sortable: false },
+  { key: 'tradeDate',    label: 'Trade date',   dropdownLabel: 'Trade date',              width: 144, sortable: true },
+  { key: 'toMaturity',   label: 'To maturity',  dropdownLabel: 'To maturity',             width: 128, sortable: true },
+  { key: 'maturityDate', label: 'Maturity date', dropdownLabel: 'Maturity date',          width: 152, sortable: true },
+  { key: 'totalInterestAccrued', label: 'Interest accrued', dropdownLabel: 'Interest accrued', width: 180, sortable: true, align: 'right' },
+  { key: 'created',      label: 'Created',      dropdownLabel: 'Created',                 width: 144, sortable: true  },
+  { key: 'author',       label: 'Author',       dropdownLabel: 'Author',                  width: 184, sortable: false },
+  { key: 'counterpartyTrader', label: 'Counterparty trader', width: 184, sortable: false },
+  { key: 'custodian',    label: 'Custodian',    width: 168, sortable: false },
+  { key: 'settlementDate', label: 'Settlement date', width: 152, sortable: true },
+  { key: 'term',         label: 'Term',         width: 96,  sortable: false },
+  { key: 'book',         label: 'Book',         width: 132, sortable: false },
+  { key: 'strategy',     label: 'Strategy',     width: 160, sortable: false },
+  { key: 'rate',         label: 'Rate',         width: 96,  sortable: true, align: 'right' },
+  { key: 'interestAccrued1Day', label: 'Interest accrued 1 day', width: 184, sortable: true, align: 'right' },
+  { key: 'realizedPnL',  label: 'Realized p&l', width: 148, sortable: true, align: 'right' },
+];
+
+const MIN_TABLE_W = 1168;
+
+function parseDateValue(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return 0;
+  return new Date(match[1] + '-' + match[2] + '-' + match[3]).getTime();
+}
+
+function getTodayDateString() {
+  var now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function getToMaturityDays(value) {
+  var maturityTimestamp = parseDateValue(value);
+  var todayTimestamp = parseDateValue(getTodayDateString());
+  if (!maturityTimestamp || !todayTimestamp) return 0;
+  return Math.round((maturityTimestamp - todayTimestamp) / 86400000);
+}
+
+function formatToMaturity(value) {
+  var days = getToMaturityDays(value);
+  if (days < 0) return '—';
+  return days + ' ' + (days === 1 ? 'day' : 'days');
+}
+
+function openTrade(row) {
+  const params = new URLSearchParams({
+    mode: getModeForRow(row),
+    ticket: row.ticket,
+    status: row.status,
+    type: row.type,
+    instrument: row.instrument,
+    instrumentCode: row.instrumentCode || '',
+    counterparty: row.counterparty,
+    price: row.price,
+    qty: row.qty,
+    total: row.total,
+    created: row.created || '',
+    author: row.author || '',
+  });
+  if (isReadonlyRow(row)) params.set('readonly', '1');
+  window.location.href = 'Trade.html?' + params.toString();
+}
+
+function formatTableNumber(value, options) {
+  var stringValue = String(value == null ? '' : value).trim();
+  if (!stringValue) return '';
+
+  var isPercent = options && options.percent;
+  var decimals = options && typeof options.decimals === 'number' ? options.decimals : 3;
+  var normalized = stringValue.replace(/,/g, '').replace(/%/g, '');
+  var parsed = Number(normalized);
+
+  if (!Number.isFinite(parsed)) return stringValue;
+
+  var formatted = parsed.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+
+  return isPercent ? formatted + '%' : formatted;
+}
+
+function App() {
+  const [activeFilter, setActiveFilter] = React.useState(null);
+  const [statusesOpen, setStatusesOpen] = React.useState(false);
+  const [authorOpen, setAuthorOpen] = React.useState(false);
+  const [sortState, setSortState] = React.useState({ key: 'ticket', dir: 'desc' });
+  const [searchValue, setSearchValue] = React.useState('');
+  const [columnsOpen, setColumnsOpen] = React.useState(false);
+  const [selectedStatuses, setSelectedStatuses] = React.useState([]);
+  const [selectedColumnKeys, setSelectedColumnKeys] = React.useState(() => [
+    'instrument',
+    'portfolioName',
+    'counterparty',
+    'type',
+    'price',
+    'qty',
+    'total',
+    'status',
+    'tradeDate',
+    'toMaturity',
+    'maturityDate',
+    'created',
+    'author',
+  ]);
+  const defaultColumnKeys = React.useMemo(function() {
+    return [
+      'instrument',
+      'portfolioName',
+      'counterparty',
+      'type',
+      'price',
+      'qty',
+      'total',
+      'status',
+      'tradeDate',
+      'toMaturity',
+      'maturityDate',
+      'created',
+      'author',
+    ];
+  }, []);
+  const groupByDate = false;
+  const allRows = React.useMemo(function() { return getAllTradeRows(); }, []);
+  const authorOptions = React.useMemo(function() {
+    return Array.from(new Set(allRows.map(function(row) { return row.author; }).filter(Boolean))).sort(function(a, b) {
+      return String(a).localeCompare(String(b));
+    });
+  }, [allRows]);
+  const [selectedAuthors, setSelectedAuthors] = React.useState([]);
+  const statusesAnchorRef = React.useRef(null);
+  const authorAnchorRef = React.useRef(null);
+  const columnsAnchorRef = React.useRef(null);
+
+  React.useEffect(function() {
+    setSelectedAuthors(function(prev) {
+      return prev.filter(function(item) { return authorOptions.includes(item); });
+    });
+  }, [authorOptions]);
+
+  const toggleFilter = (f) => setActiveFilter(prev => prev === f ? null : f);
+  const toggleStatus = React.useCallback(function(status) {
+    setSelectedStatuses(function(prev) {
+      if (prev.includes(status)) {
+        return prev.filter(function(item) { return item !== status; });
+      }
+      return [...prev, status];
+    });
+  }, []);
+  const toggleAuthor = React.useCallback(function(author) {
+    setSelectedAuthors(function(prev) {
+      if (prev.includes(author)) {
+        return prev.filter(function(item) { return item !== author; });
+      }
+      return [...prev, author];
+    });
+  }, []);
+  const handleSort = (key) => setSortState(prev =>
+    prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }
+  );
+
+  const searchedRows = React.useMemo(function() {
+    const query = searchValue.trim().toLowerCase();
+    if (!query) return allRows;
+    return allRows.filter(function(row) {
+      return [
+        row.instrument,
+        row.portfolioName,
+        row.counterparty,
+        row.type,
+        STATUS_LABELS[row.status],
+        row.tradeDate,
+        formatToMaturity(row.maturityDate),
+        row.maturityDate,
+        row.totalInterestAccrued,
+        row.created,
+        row.author,
+        row.counterpartyTrader,
+        row.custodian,
+        row.settlementDate,
+        row.term,
+        row.book,
+        row.strategy,
+        row.rate,
+        row.interestAccrued1Day,
+        row.realizedPnL,
+        row.ticket,
+      ].some(function(value) {
+        return String(value || '').toLowerCase().includes(query);
+      });
+    });
+  }, [allRows, searchValue]);
+
+  const filteredRows = React.useMemo(function() {
+    return searchedRows.filter(function(row) {
+      const statusPass = selectedStatuses.length === 0 || selectedStatuses.includes(STATUS_LABELS[row.status]);
+      const authorPass = selectedAuthors.length === 0 || selectedAuthors.includes(row.author);
+      return statusPass && authorPass;
+    });
+  }, [searchedRows, selectedStatuses, selectedAuthors]);
+
+  const sorted = [...filteredRows].sort((a, b) => {
+    const key = sortState.key;
+
+    function parseNumber(value) {
+      return Number(String(value || '0').replace(/,/g, ''));
+    }
+
+    let cmp = 0;
+    if (key === 'created' || key === 'tradeDate' || key === 'maturityDate') {
+      cmp = parseDateValue(a[key]) - parseDateValue(b[key]);
+    } else if (key === 'toMaturity') {
+      cmp = getToMaturityDays(a.maturityDate) - getToMaturityDays(b.maturityDate);
+    } else if (key === 'ticket' || key === 'price' || key === 'qty' || key === 'total' || key === 'totalInterestAccrued' || key === 'rate' || key === 'interestAccrued1Day' || key === 'realizedPnL') {
+      cmp = parseNumber(a[key]) - parseNumber(b[key]);
+    } else {
+      const va = String(a[key] || '');
+      const vb = String(b[key] || '');
+      cmp = va.localeCompare(vb);
+    }
+
+    return sortState.dir === 'asc' ? cmp : -cmp;
+  });
+
+  const visibleCols = React.useMemo(function() {
+    const selectedSet = new Set(selectedColumnKeys);
+    const filtered = COLS.filter(function(col) { return selectedSet.has(col.key); });
+    return groupByDate ? filtered.filter(function(col) { return col.key !== 'created'; }) : filtered;
+  }, [groupByDate, selectedColumnKeys]);
+
+  const toggleColumn = React.useCallback(function(key) {
+    setSelectedColumnKeys(function(prev) {
+      if (prev.includes(key)) {
+        if (prev.length === 1) return prev;
+        return prev.filter(function(item) { return item !== key; });
+      }
+      const orderMap = new Map(COLS.map(function(col, index) { return [col.key, index]; }));
+      return [...prev, key].sort(function(a, b) {
+        return orderMap.get(a) - orderMap.get(b);
+      });
+    });
+  }, []);
+  const setSelectedColumnKeysOrdered = React.useCallback(function(nextKeys) {
+    if (!Array.isArray(nextKeys) || nextKeys.length === 0) {
+      setSelectedColumnKeys(defaultColumnKeys);
+      return;
+    }
+    const orderMap = new Map(COLS.map(function(col, index) { return [col.key, index]; }));
+    const nextOrderedKeys = nextKeys
+      .filter(function(key) { return orderMap.has(key); })
+      .sort(function(a, b) {
+        return orderMap.get(a) - orderMap.get(b);
+      });
+    setSelectedColumnKeys(nextOrderedKeys.length > 0 ? nextOrderedKeys : defaultColumnKeys);
+  }, [defaultColumnKeys]);
+
+  const tableWidth = React.useMemo(function() {
+    const colsWidth = visibleCols.reduce(function(sum, col) { return sum + col.width; }, ROW_NUMBER_SLOT_WIDTH);
+    return Math.max(colsWidth, MIN_TABLE_W);
+  }, [visibleCols]);
+
+  const rowNumberByTicket = React.useMemo(function() {
+    const map = new Map();
+    sorted.forEach(function(row, index) {
+      map.set(row.ticket, index + 1);
+    });
+    return map;
+  }, [sorted]);
+
+  const groupedRows = React.useMemo(function() {
+    const groups = [];
+    const byDate = new Map();
+
+    sorted.forEach(function(row) {
+      const key = row.created || 'Unknown date';
+      if (!byDate.has(key)) {
+        const group = { date: key, rows: [] };
+        byDate.set(key, group);
+        groups.push(group);
+      }
+      byDate.get(key).rows.push(row);
+    });
+
+    return groups.sort(function(a, b) {
+      const cmp = parseDateValue(a.date) - parseDateValue(b.date);
+      if (sortState.key === 'created' && sortState.dir === 'asc') return cmp;
+      return -cmp;
+    });
+  }, [sorted, sortState]);
+
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Security trades' }]} user="treasury.demo@plata.local">
+      <PageWorkspace gap={T.spacing[2]} padding={T.spacing[5]}>
+        <SideMenu activeSectionKey="trades" activeItemKey="security" />
+
+        <StackColumn flex={1} minWidth={MIN_TABLE_W} minHeight={0} gap={T.spacing[2]}>
+
+          <Island
+            style={{ minWidth: MIN_TABLE_W }}
+            gap={T.spacing.base}
+            background={T.colors.bgNeutralBase}
+          >
+            <ToolbarTile minHeight={72} gap={8}>
+              <PageTitle label="Security trades" />
+              <FlexSpacer />
+              <SearchBar value={searchValue} onChange={setSearchValue} />
+              <Chip
+                label="Download"
+                tone="secondary"
+                iconElement={<DownloadIcon16 />}
+                onClick={() => {
+                  const header = [
+                    'Instrument',
+                    'Portfolio',
+                    'Counterparty',
+                    'Trade Type',
+                    'Price',
+                    'Quantity',
+                    'Total Amount',
+                    'Status',
+                    'Trade date',
+                    'To maturity',
+                    'Maturity date',
+                    'Total Interest Accrued',
+                    'Created',
+                    'Author',
+                    'Counterparty trader',
+                    'Custodian',
+                    'Settlement Date',
+                    'Term',
+                    'Book',
+                    'Strategy',
+                    'Rate (%)',
+                    'Interest Accrued 1 day',
+                    'Realized P&L',
+                  ];
+                  const lines = sorted.map(function(row) {
+                    return [
+                      row.instrument,
+                      row.portfolioName,
+                      row.counterparty,
+                      row.type === 'buy' ? 'Buy' : 'Sell',
+                      row.price,
+                      row.qty,
+                      row.total,
+                      STATUS_LABELS[row.status],
+                      row.tradeDate,
+                      formatToMaturity(row.maturityDate),
+                      row.maturityDate,
+                      row.totalInterestAccrued,
+                      row.created,
+                      row.author,
+                      row.counterpartyTrader,
+                      row.custodian,
+                      row.settlementDate,
+                      row.term,
+                      row.book,
+                      row.strategy,
+                      row.rate,
+                      row.interestAccrued1Day,
+                      row.realizedPnL,
+                    ].map(function(value) {
+                      var text = String(value || '');
+                      return '"' + text.replace(/"/g, '""') + '"';
+                    }).join(',');
+                  });
+                  const csv = [header.join(','), ...lines].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'security-trades.csv';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                }}
+              />
+              <PrimaryActionButton
+                label="New trade"
+                icon={<PlusIcon16 />}
+                onClick={() => window.location.href = 'Trade.html?mode=edit'}
+              />
+            </ToolbarTile>
+
+            <ToolbarTile minHeight={80} gap={8}>
+                {FILTER_CHIPS.map(f => {
+                  if (f === 'Statuses') {
+                    return (
+                      <RelativeInline key={f} innerRef={statusesAnchorRef}>
+                        <Chip
+                          label={f}
+                          active={selectedStatuses.length > 0}
+                          onClick={() => setStatusesOpen(function(prev) { return !prev; })}
+                          showChevron={true}
+                        />
+                        {statusesOpen ? (
+                          <FilterDropdown
+                            width={336}
+                            anchorRef={statusesAnchorRef}
+                            options={STATUS_FILTER_OPTIONS}
+                            selectedKeys={selectedStatuses}
+                            onSetSelectedKeys={setSelectedStatuses}
+                            onToggleKey={toggleStatus}
+                            onClose={() => setStatusesOpen(false)}
+                            getOptionKey={(option) => option}
+                            getOptionLabel={(option) => option}
+                            preferredAlign="end"
+                            preferredSide="bottom"
+                            gap={8}
+                            margin={8}
+                            itemMinHeight={48}
+                          />
+                        ) : null}
+                      </RelativeInline>
+                    );
+                  }
+                  if (f === 'Author') {
+                    return (
+                      <RelativeInline key={f} innerRef={authorAnchorRef}>
+                        <Chip
+                          label={f}
+                          active={selectedAuthors.length > 0}
+                          onClick={() => setAuthorOpen(function(prev) { return !prev; })}
+                          showChevron={true}
+                        />
+                        {authorOpen ? (
+                          <FilterDropdown
+                            width={280}
+                            anchorRef={authorAnchorRef}
+                            options={authorOptions}
+                            selectedKeys={selectedAuthors}
+                            onSetSelectedKeys={setSelectedAuthors}
+                            onToggleKey={toggleAuthor}
+                            onClose={() => setAuthorOpen(false)}
+                            getOptionKey={(option) => option}
+                            getOptionLabel={(option) => option}
+                            preferredAlign="end"
+                            preferredSide="bottom"
+                            gap={8}
+                            margin={8}
+                            itemMinHeight={48}
+                          />
+                        ) : null}
+                      </RelativeInline>
+                    );
+                  }
+                  return (
+                    <Chip
+                      key={f}
+                      label={f}
+                      active={activeFilter === f}
+                      onClick={() => toggleFilter(f)}
+                      showChevron={CHEVRON_CHIPS.has(f)}
+                    />
+                  );
+                })}
+                <FlexSpacer />
+                <RelativeInline innerRef={columnsAnchorRef}>
+                  <Chip
+                    label="Columns"
+                    iconElement={<ColumnsIcon16 />}
+                    onClick={() => setColumnsOpen(function(prev) { return !prev; })}
+                  />
+                  {columnsOpen ? (
+                    <FilterDropdown
+                      width={280}
+                      anchorRef={columnsAnchorRef}
+                      options={COLS}
+                      selectedKeys={selectedColumnKeys}
+                      onSetSelectedKeys={setSelectedColumnKeysOrdered}
+                      onToggleKey={toggleColumn}
+                      onClose={() => setColumnsOpen(false)}
+                      getOptionKey={(option) => option.key}
+                      getOptionLabel={(option) => option.dropdownLabel || option.label}
+                      preferredAlign="end"
+                      preferredSide="bottom"
+                      gap={8}
+                      margin={8}
+                      itemMinHeight={48}
+                    />
+                  ) : null}
+                </RelativeInline>
+            </ToolbarTile>
+          </Island>
+
+          {groupByDate ? (
+            <TableContent minWidth={MIN_TABLE_W} fill={true}>
+              <ScrollColumn x="auto" y="auto">
+                <TableContent minWidth={tableWidth} gap={T.spacing[2]} paddingBottom={T.spacing[2]}>
+                  {groupedRows.map((group) => (
+                    <Island key={group.date} style={{ minWidth: tableWidth, flexShrink: 0 }}>
+                      <DateGroupHeader date={group.date} count={group.rows.length} />
+                      <TableContent minWidth={tableWidth}>
+                        <StickyTableHeader>
+                          <RowNumberHeaderCell />
+                          {visibleCols.map((col, i) => (
+                            <ColHeader
+                              key={col.key}
+                              label={col.label}
+                              width={col.width}
+                              sortKey={col.key}
+                              sortable={col.sortable}
+                              sortState={sortState}
+                              onSort={handleSort}
+                              align={col.align}
+                              first={false}
+                              last={i === visibleCols.length - 1}
+                              paddingLeft={i === 0 ? 0 : undefined}
+                            />
+                          ))}
+                        </StickyTableHeader>
+
+                        {group.rows.map((row, i) => (
+                          <InteractiveRow
+                            key={row.ticket + '-' + i}
+                            onClick={() => openTrade(row)}
+                            selectedBg={T.colors.bgAccentLight}
+                            hoverBg={T.colors.bgSecondary}
+                          >
+                            <RowNumberCell value={rowNumberByTicket.get(row.ticket)} />
+                            {visibleCols.map((col, index) => React.createElement(SecurityTradeTableCell, {
+  TRADE_TYPE_VARIANT: TRADE_TYPE_VARIANT,
+  formatTableNumber: formatTableNumber,
+  STATUS_LABELS: STATUS_LABELS,
+  TRADE_STATUS_VARIANT: TRADE_STATUS_VARIANT,
+  getToMaturityDays: getToMaturityDays,
+  formatToMaturity: formatToMaturity,
+  col: col,
+  row: row,
+  index: index,
+  last: index === visibleCols.length - 1,
+  key: col.key
+}))}
+                          </InteractiveRow>
+                        ))}
+                      </TableContent>
+                    </Island>
+                  ))}
+                  {groupedRows.length === 0 && (
+                    <EmptyState label="No trades found" />
+                  )}
+                </TableContent>
+              </ScrollColumn>
+            </TableContent>
+          ) : (
+            <Island style={{ flex: 1, minWidth: MIN_TABLE_W, minHeight: 0 }}>
+              <ScrollColumn x="auto" y="auto">
+                <TableContent minWidth={tableWidth} paddingBottom={T.spacing[2]}>
+
+                  <StickyTableHeader>
+                    <RowNumberHeaderCell />
+                    {visibleCols.map((col, i) => (
+                      <ColHeader
+                        key={col.key}
+                        label={col.label}
+                        width={col.width}
+                        sortKey={col.key}
+                        sortable={col.sortable}
+                        sortState={sortState}
+                        onSort={handleSort}
+                        align={col.align}
+                        first={false}
+                        last={i === visibleCols.length - 1}
+                        paddingLeft={i === 0 ? 0 : undefined}
+                      />
+                    ))}
+                  </StickyTableHeader>
+
+                  {sorted.map((row, i) => {
+                    return (
+                      <InteractiveRow
+                        key={i}
+                        onClick={() => openTrade(row)}
+                        selectedBg={T.colors.bgAccentLight}
+                        hoverBg={T.colors.bgSecondary}
+                      >
+                        <RowNumberCell value={i + 1} />
+                        {visibleCols.map((col, index) => React.createElement(SecurityTradeTableCell, {
+  TRADE_TYPE_VARIANT: TRADE_TYPE_VARIANT,
+  formatTableNumber: formatTableNumber,
+  STATUS_LABELS: STATUS_LABELS,
+  TRADE_STATUS_VARIANT: TRADE_STATUS_VARIANT,
+  getToMaturityDays: getToMaturityDays,
+  formatToMaturity: formatToMaturity,
+  col: col,
+  row: row,
+  index: index,
+  last: index === visibleCols.length - 1,
+  key: col.key
+}))}
+                      </InteractiveRow>
+                    );
+                  })}
+
+                  {sorted.length === 0 && (
+                    <EmptyState label="No trades found" />
+                  )}
+                </TableContent>
+              </ScrollColumn>
+            </Island>
+          )}
+        </StackColumn>
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

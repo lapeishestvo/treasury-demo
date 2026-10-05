@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FX Option - Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/TradeTypeBadge.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FormPageHeader.js"></script>
+<script src="components/AuraStepper.js"></script>
+<script src="components/Island.js"></script>
+<script src="components/SectionHeader.js"></script>
+<script src="components/Fieldset.js"></script>
+<script src="components/ReviewRow.js"></script>
+<script src="components/ButtonStack.js"></script>
+<script src="components/InputField.js"></script>
+<script src="components/TextareaField.js"></script>
+<script src="components/SelectField.js"></script>
+<script src="components/SegmentedControl.js"></script>
+<script src="components/FormSection.js"></script>
+<script src="components/ViewSection.js"></script>
+<script src="components/UploadBox.js"></script>
+<script src="components/UiPrimitives.js"></script>
+<script src="components/FieldWithAddon.js"></script>
+<script src="components/WorkflowFeedback.js"></script>
+<script src="components/FxOptionPanels.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: none; }
+.scrollable::-webkit-scrollbar { display: none; }
+input, textarea { font-family: var(--aura-font-family, 'Inter', sans-serif); }
+@keyframes tile-flash {
+  0%   { background-color: var(--aura-bg-accent-light); }
+  35%  { background-color: var(--aura-bg-accent-light); }
+  100% { background-color: var(--aura-bg-neutral-primary); }
+}
+.tile-flash {
+  animation: tile-flash 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const T = AuraTokens;
+const STEPPER_W = 240;
+const CONTENT_W = 520;
+const RIGHT_W = 360;
+const STORAGE_KEY = 'aura_fx_option_trades';
+const CURRENT_USER = 'Sergio Chavez';
+
+const STATUS_LABELS = {
+  draft: 'Draft',
+  pending_approval: 'Pending approval',
+  pending_mo_reconciliation: 'Pending reconcillation',
+  pending_settlement: 'Pending settlement',
+  pending_settlement_approval: 'Pending settlement approval',
+  live: 'Live',
+  pending_exercise_decision: 'Pending exercise decision',
+  settling: 'Settling',
+  settled: 'Settled',
+  returned_to_fo: 'Returned',
+  returned_to_bo: 'Settlement returned',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+  expired: 'Expired',
+  exception: 'Exception',
+};
+
+const STATUS_VARIANTS = {
+  draft: 'neutral-secondary',
+  pending_approval: 'warning-secondary',
+  pending_mo_reconciliation: 'accent-secondary',
+  pending_settlement: 'accent-secondary',
+  pending_settlement_approval: 'warning-secondary',
+  live: 'accent-secondary',
+  pending_exercise_decision: 'accent-secondary',
+  settling: 'accent-secondary',
+  settled: 'success-secondary',
+  returned_to_fo: 'error-tertiary',
+  returned_to_bo: 'error-tertiary',
+  declined: 'error-secondary',
+  cancelled: 'neutral-secondary',
+  expired: 'neutral-secondary',
+  exception: 'error-secondary',
+};
+
+const REVIEWER_DEFAULTS = {
+  returned_to_fo: {
+    title: 'Review',
+    reviewer: 'Mariana Ortiz',
+    reviewedAt: '2026-07-08',
+    comment: 'Please correct the trade parameters and resubmit.',
+  },
+  returned_to_bo: {
+    title: 'Review',
+    reviewer: 'Fabiola Lopez',
+    reviewedAt: '2026-07-08',
+    comment: 'Please review the payment details and submit again.',
+  },
+  declined: {
+    title: 'Review',
+    reviewer: 'Treasury Management',
+    reviewedAt: '2026-07-08',
+    comment: 'The trade was declined and is now read-only.',
+  },
+  exception: {
+    title: 'Review',
+    reviewer: 'Operations',
+    reviewedAt: '2026-07-08',
+    comment: 'This trade requires manual handling outside the standard workflow.',
+  },
+};
+
+const MODES = new Set([
+  'edit',
+  'review',
+  'approval_detail',
+  'reconciliation_detail',
+  'premium_form',
+  'premium_review',
+  'premium_approval_detail',
+  'live_detail',
+  'exercise_form',
+  'exercise_review',
+  'settling_form',
+  'settling_review',
+  'settled_detail',
+]);
+
+const SECTION_STEPS = [
+  { label: 'Main info', anchor: 'section-main-info' },
+  { label: 'When', anchor: 'section-when' },
+  { label: 'How much', anchor: 'section-how-much' },
+];
+
+const ASSET_OPTIONS = ['MXN'];
+const OPTION_TYPE_OPTIONS = ['Call', 'Put'];
+const SIDE_OPTIONS = ['Buy', 'Sell'];
+const SETTLEMENT_TYPE_OPTIONS = ['Physical', 'Cash'];
+const CURRENCY_OPTIONS = ['MXN'];
+const COUNTERPARTY_OPTIONS = ['Banco Base', 'CitiFX', 'BBVA', 'Santander', 'Banorte'];
+const FIXING_SOURCE_OPTIONS = ['BANXICO_FIX', 'BLOOMBERG_BFIX', 'WMR_REUTERS'];
+const MONEYNESS_OPTIONS = ['ITM', 'ATM', 'OTM'];
+
+function parseDateValue(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return 0;
+  return new Date(match[1] + '-' + match[2] + '-' + match[3]).getTime();
+}
+
+function normalizeDateString(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const legacy = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (legacy) return legacy[3] + '-' + legacy[2] + '-' + legacy[1];
+  return raw;
+}
+
+function formatNumber(value, decimals) {
+  const parsed = Number(String(value || '0').replace(/,/g, ''));
+  if (!Number.isFinite(parsed)) return String(value || '');
+  return parsed.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function getModeForStatus(status) {
+  if (status === 'draft' || status === 'returned_to_fo') return 'edit';
+  if (status === 'pending_approval') return 'approval_detail';
+  if (status === 'pending_mo_reconciliation') return 'reconciliation_detail';
+  if (status === 'pending_settlement' || status === 'returned_to_bo') return 'premium_form';
+  if (status === 'pending_settlement_approval') return 'premium_approval_detail';
+  if (status === 'live') return 'live_detail';
+  if (status === 'pending_exercise_decision') return 'exercise_form';
+  if (status === 'settling') return 'settling_form';
+  return 'settled_detail';
+}
+
+function seedInstrument(row) {
+  const typeShort = row.optionType === 'Call' ? 'CALL' : 'PUT';
+  const assetCode = String(row.asset || '').replace('/', '');
+  return typeShort + '_' + assetCode + '_' + String(row.maturityDate || '').slice(2).replace(/-/g, '') + '_V' + row.optionId;
+}
+
+function loadRows() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRows(rows) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+}
+
+function upsertRow(row) {
+  const rows = loadRows();
+  const nextRow = { ...row };
+  nextRow.instrument = seedInstrument(nextRow);
+  const existingIndex = rows.findIndex((item) => String(item.optionId) === String(nextRow.optionId));
+  if (existingIndex >= 0) {
+    rows[existingIndex] = { ...rows[existingIndex], ...nextRow };
+  } else {
+    rows.unshift(nextRow);
+  }
+  saveRows(rows);
+  return nextRow;
+}
+
+function getNextOptionId() {
+  const rows = loadRows();
+  const numericIds = rows.map((row) => Number(row.optionId || 0)).filter((value) => Number.isFinite(value) && value > 0);
+  const nextId = numericIds.length > 0 ? Math.max.apply(null, numericIds) + 1 : 300001;
+  return String(nextId);
+}
+
+function getInitialTradeContext() {
+  const url = new URL(window.location.href);
+  const requestedMode = url.searchParams.get('mode') || 'edit';
+  const mode = MODES.has(requestedMode) ? requestedMode : 'edit';
+  const optionId = String(url.searchParams.get('optionId') || '');
+  const rows = loadRows();
+  const row = optionId ? rows.find((item) => String(item.optionId) === optionId) : null;
+  const status = url.searchParams.get('status') || (row && row.status) || 'draft';
+  return { mode, optionId, row, status };
+}
+
+function buildInitialForm(context) {
+  const row = context.row || {};
+  const isNewTrade = !context.row && context.mode === 'edit';
+  return {
+    tradeDate: normalizeDateString(row.tradeDate) || (isNewTrade ? '' : '2026-07-08'),
+    asset: row.asset || 'MXN',
+    optionType: row.optionType || '',
+    side: row.side || 'Buy',
+    settlementType: row.settlementType || '',
+    cashSettlementCurrency: row.cashSettlementCurrency || 'MXN',
+    counterparty: row.counterparty || '',
+    fixingSource: row.fixingSource || '',
+    maturityDate: normalizeDateString(row.maturityDate) || (isNewTrade ? '' : '2026-09-10'),
+    strikeDate: normalizeDateString(row.strikeDate || row.maturityDate) || (isNewTrade ? '' : '2026-09-10'),
+    settlementDate: normalizeDateString(row.settlementDate) || (isNewTrade ? '' : '2026-07-08'),
+    strikePrice: row.strikePrice || '',
+    notional: row.notional || '',
+    notionalCurrency: row.notionalCurrency || 'MXN',
+    premium: row.premium || '',
+    premiumCurrency: row.premiumCurrency || 'MXN',
+    keyTrxConfirmation: row.keyTrxConfirmation || '',
+    uti: row.uti || '',
+    reviewComment: row.reviewComment || '',
+    paymentReference: row.paymentReference || '',
+    proofOfPayment: row.proofOfPayment || '',
+    authorizationComment: row.authorizationComment || '',
+    observedRate: row.observedRate || '18.3000',
+    moneyness: row.moneyness || 'ITM',
+    payAmount: row.payAmount || '516000000',
+    payCurrency: row.payCurrency || 'MXN',
+    receiveAmount: row.receiveAmount || '30000000',
+    receiveCurrency: row.receiveCurrency || 'USD',
+    payoutAmount: row.payoutAmount || '33000000',
+    payoutCurrency: row.payoutCurrency || 'MXN',
+    settlementComment: row.settlementComment || '',
+    payReference: row.payReference || '',
+    payProof: row.payProof || '',
+    receiveReference: row.receiveReference || '',
+    receiveProof: row.receiveProof || '',
+    payoutReference: row.payoutReference || '',
+    payoutProof: row.payoutProof || '',
+  };
+}
+
+function buildTradeRows(form) {
+  const settlementValue = form.settlementType
+    ? (form.settlementType === 'Cash'
+        ? form.settlementType + ', ' + (form.cashSettlementCurrency || 'MXN')
+        : form.settlementType)
+    : '—';
+  return [
+    { label: 'Trade type', value: <TradeTypeBadge value={form.side} signed={true} emptyLabel="—" /> },
+    { label: 'Option type', value: form.optionType },
+    { label: 'Asset', value: form.asset },
+    { label: 'Counterparty', value: form.counterparty },
+    { label: 'Settlement type', value: settlementValue },
+    { label: 'Fixing source', value: form.fixingSource },
+  ];
+}
+
+function buildWhenRows(form) {
+  return [
+    { label: 'Trade date', value: form.tradeDate },
+    { label: 'Maturity date', value: form.maturityDate },
+    { label: 'Strike date', value: form.strikeDate },
+    { label: 'Settlement date', value: form.settlementDate },
+  ];
+}
+
+function buildHowMuchRows(form) {
+  return [
+    { label: 'Strike price', value: form.strikePrice ? 'MXN ' + form.strikePrice : '—' },
+    { label: 'Notional', value: form.notional ? 'MXN ' + formatNumber(form.notional, 0) : '—' },
+    { label: 'Premium', value: form.premium ? 'MXN ' + formatNumber(form.premium, 0) : '—' },
+  ];
+}
+
+function App() {
+  const initialContext = React.useMemo(() => getInitialTradeContext(), []);
+  const originalCreator = (initialContext.row && initialContext.row.createdBy) || CURRENT_USER;
+  const [mode, setMode] = React.useState(initialContext.mode);
+  const [status, setStatus] = React.useState(initialContext.status);
+  const [optionId, setOptionId] = React.useState(initialContext.optionId);
+  const [form, setForm] = React.useState(() => buildInitialForm(initialContext));
+  const [flashKeys, setFlashKeys] = React.useState({});
+  const scrollRef = React.useRef(null);
+  const scrollTarget = React.useRef(null);
+  const savedTop = React.useRef(null);
+
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    if (savedTop.current !== null) {
+      container.scrollTop = savedTop.current;
+      savedTop.current = null;
+    }
+    if (scrollTarget.current) {
+      const el = document.getElementById(scrollTarget.current);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        const contRect = container.getBoundingClientRect();
+        const nextTop = Math.max(0, container.scrollTop + (elRect.top - contRect.top) - 8);
+        container.scrollTo({ top: nextTop, behavior: 'smooth' });
+      }
+      scrollTarget.current = null;
+    }
+  });
+
+  const isReturnedToFo = status === 'returned_to_fo';
+  const isReturnedToBo = status === 'returned_to_bo';
+  const reviewerDefaults = REVIEWER_DEFAULTS[status] || null;
+
+  function updateField(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function persistTrade(nextStatus, extra) {
+    const nextId = optionId || getNextOptionId();
+    if (!optionId) setOptionId(nextId);
+    const payload = {
+      optionId: nextId,
+      status: nextStatus,
+      asset: form.asset,
+      optionType: form.optionType,
+      side: form.side,
+      settlementType: form.settlementType,
+      cashSettlementCurrency: form.cashSettlementCurrency,
+      counterparty: form.counterparty,
+      fixingSource: form.fixingSource,
+      tradeDate: form.tradeDate,
+      maturityDate: form.maturityDate,
+      strikeDate: form.strikeDate,
+      settlementDate: form.settlementDate,
+      strikePrice: form.strikePrice,
+      notional: form.notional,
+      notionalCurrency: form.notionalCurrency,
+      premium: form.premium,
+      premiumCurrency: form.premiumCurrency,
+      keyTrxConfirmation: form.keyTrxConfirmation,
+      uti: form.uti,
+      assigned: extra && extra.assigned ? extra.assigned : CURRENT_USER,
+      createdBy: (initialContext.row && initialContext.row.createdBy) || CURRENT_USER,
+      reviewComment: form.reviewComment,
+      paymentReference: form.paymentReference,
+      proofOfPayment: form.proofOfPayment,
+      authorizationComment: form.authorizationComment,
+      observedRate: form.observedRate,
+      moneyness: form.moneyness,
+      payAmount: form.payAmount,
+      payCurrency: form.payCurrency,
+      receiveAmount: form.receiveAmount,
+      receiveCurrency: form.receiveCurrency,
+      payoutAmount: form.payoutAmount,
+      payoutCurrency: form.payoutCurrency,
+      settlementComment: form.settlementComment,
+      payReference: form.payReference,
+      payProof: form.payProof,
+      receiveReference: form.receiveReference,
+      receiveProof: form.receiveProof,
+      payoutReference: form.payoutReference,
+      payoutProof: form.payoutProof,
+      ...(extra || {}),
+    };
+    return upsertRow(payload);
+  }
+
+  function goToBlotter() {
+    window.location.href = 'FX Options.html';
+  }
+
+  function handleStepClick(anchor) {
+    if (scrollRef.current) savedTop.current = scrollRef.current.scrollTop;
+    scrollTarget.current = anchor;
+    setFlashKeys((prev) => ({ ...prev, [anchor]: (prev[anchor] || 0) + 1 }));
+  }
+
+  function openReview() {
+    persistTrade(status === 'returned_to_fo' ? 'draft' : status, {});
+    setMode(mode === 'premium_form' ? 'premium_review' : mode === 'exercise_form' ? 'exercise_review' : mode === 'settling_form' ? 'settling_review' : 'review');
+  }
+
+  function submitCreateReview() {
+    persistTrade('pending_approval', { assigned: 'Management' });
+    goToBlotter();
+  }
+
+  function submitPremiumReview() {
+    persistTrade('pending_settlement_approval', { assigned: 'BO Checker' });
+    goToBlotter();
+  }
+
+  function submitExerciseReview() {
+    persistTrade('settling', { assigned: 'BO Maker' });
+    goToBlotter();
+  }
+
+  function submitSettlingReview() {
+    persistTrade('settled', { assigned: '—' });
+    goToBlotter();
+  }
+
+  const baseSteps = React.useMemo(() => SECTION_STEPS.slice(), []);
+  const tradeRows = buildTradeRows(form);
+  const whenRows = buildWhenRows(form);
+  const howMuchRows = buildHowMuchRows(form);
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  let title = optionId ? 'FX Option ' + optionId : 'New FX Option';
+  let mainColumn = null;
+  let sideColumn = null;
+  let headerStatus = STATUS_LABELS[status];
+  let headerStatusVariant = STATUS_VARIANTS[status];
+  const showLiveStep = mode === 'live_detail';
+  const currentSteps = showLiveStep
+    ? baseSteps.concat([{ label: 'Live position', anchor: 'section-live-position' }])
+    : baseSteps;
+  const navigationColumn = (
+    <AuraStepper
+      steps={currentSteps}
+      onStepClick={handleStepClick}
+      hideNumbers={true}
+      fillHeight={true}
+      disableAutoScroll={true}
+    />
+  );
+  const hasNavigation = true;
+  const hasRightColumn = [
+    'approval_detail',
+    'reconciliation_detail',
+    'premium_form',
+    'premium_review',
+    'premium_approval_detail',
+    'exercise_form',
+    'exercise_review',
+    'settling_form',
+    'settling_review',
+  ].includes(mode);
+  if (mode === 'edit' || mode === 'review') {
+    title = optionId ? (isReturnedToFo ? 'Returned FX Option ' + optionId : 'FX Option ' + optionId) : 'New FX Option';
+    if (!optionId && mode === 'edit') {
+      headerStatus = undefined;
+      headerStatusVariant = undefined;
+    } else if (!optionId && mode === 'review') {
+      headerStatus = STATUS_LABELS.draft;
+      headerStatusVariant = STATUS_VARIANTS.draft;
+    }
+    mainColumn = mode === 'edit' ? React.createElement(FxOptionCreateColumn, {
+  scrollRef,
+  isReturnedToFo,
+  reviewerDefaults,
+  flashKeys,
+  form,
+  updateField,
+  OPTION_TYPE_OPTIONS,
+  ASSET_OPTIONS,
+  COUNTERPARTY_OPTIONS,
+  SETTLEMENT_TYPE_OPTIONS,
+  CURRENCY_OPTIONS,
+  FIXING_SOURCE_OPTIONS,
+  openReview
+}) : React.createElement(FxOptionCreateReview, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows,
+  setMode,
+  submitCreateReview
+});
+  } else if (mode === 'approval_detail') {
+    mainColumn = React.createElement(FxOptionTradeInfoColumn, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows
+});
+    sideColumn = React.createElement(FxOptionApprovalPanel, {
+  form,
+  updateField,
+  persistTrade,
+  originalCreator,
+  goToBlotter
+});
+  } else if (mode === 'reconciliation_detail') {
+    mainColumn = React.createElement(FxOptionTradeInfoColumn, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows
+});
+    sideColumn = React.createElement(FxOptionReconciliationPanel, {
+  form,
+  updateField,
+  persistTrade,
+  originalCreator,
+  goToBlotter
+});
+  } else if (mode === 'premium_form' || mode === 'premium_review') {
+    title = (isReturnedToBo ? 'Settlement Returned ' : 'FX Option ') + (optionId || '');
+    mainColumn = React.createElement(FxOptionTradeInfoColumn, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows
+});
+    sideColumn = mode === 'premium_form' ? React.createElement(FxOptionPremiumForm, {
+  reviewerDefaults,
+  form,
+  updateField,
+  setMode
+}) : React.createElement(FxOptionPremiumReview, {
+  form,
+  setMode,
+  submitPremiumReview
+});
+  } else if (mode === 'premium_approval_detail') {
+    mainColumn = React.createElement(FxOptionTradeInfoColumn, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows
+});
+    sideColumn = React.createElement(FxOptionPremiumApprovalPanel, {
+  form,
+  updateField,
+  persistTrade,
+  goToBlotter
+});
+  } else if (mode === 'live_detail') {
+    mainColumn = React.createElement(FxOptionLiveColumn, {
+  flashKeys,
+  initialContext,
+  scrollRef,
+  tradeRows,
+  whenRows,
+  howMuchRows
+});
+  } else if (mode === 'exercise_form' || mode === 'exercise_review') {
+    mainColumn = React.createElement(FxOptionTradeInfoColumn, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows
+});
+    sideColumn = mode === 'exercise_form' ? React.createElement(FxOptionExerciseForm, {
+  form,
+  updateField,
+  MONEYNESS_OPTIONS,
+  CURRENCY_OPTIONS,
+  setMode
+}) : React.createElement(FxOptionExerciseReview, {
+  form,
+  setMode,
+  submitExerciseReview
+});
+  } else if (mode === 'settling_form' || mode === 'settling_review') {
+    mainColumn = React.createElement(FxOptionTradeInfoColumn, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows
+});
+    sideColumn = mode === 'settling_form' ? React.createElement(FxOptionSettlingForm, {
+  form,
+  updateField,
+  setMode
+}) : React.createElement(FxOptionSettlingReview, {
+  form,
+  setMode,
+  submitSettlingReview
+});
+  } else {
+    mainColumn = React.createElement(FxOptionTradeInfoColumn, {
+  scrollRef,
+  tradeRows,
+  flashKeys,
+  whenRows,
+  howMuchRows,
+  extraChildren: <ReviewDetailsTile {...reviewerDefaults || {}} />
+});
+  }
+
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'FX Options' }]} user="treasury.demo@plata.local">
+      <PageWorkspace gap={8} padding={20} justifyContent="center">
+        <FlowStageLayout
+          navWidth={hasNavigation ? STEPPER_W : undefined}
+          mainWidth={CONTENT_W}
+          sideWidth={hasRightColumn ? RIGHT_W : undefined}
+          nav={hasNavigation ? navigationColumn : null}
+          main={mainColumn}
+          side={sideColumn}
+          header={(totalWidth) => (
+            <FormPageHeader
+              title={title}
+              status={headerStatus}
+              statusVariant={headerStatusVariant}
+              width={totalWidth}
+              onBack={goToBlotter}
+            />
+          )}
+        />
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

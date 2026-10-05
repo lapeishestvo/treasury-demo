@@ -1,0 +1,11 @@
+@media (max-width: 600px) {
+  .aura-topbar-responsive { padding: 0 20px !important; min-width: 0; gap: 12px; }
+  .aura-topbar-responsive .aura-user-button { display: none; }
+  .aura-topbar-responsive .aura-breadcrumbs { min-width: 0; overflow: hidden; }
+  .aura-topbar-responsive .aura-breadcrumbs > :not(:last-child) { display: none; }
+  .aura-topbar-responsive .aura-breadcrumbs > :last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .aura-detail-header { height: auto !important; min-height: 92px; padding: 20px !important; flex-wrap: wrap; }
+  .aura-detail-header .aura-detail-title { flex: 1 1 calc(100% - 68px) !important; }
+  .aura-detail-header .aura-detail-title > span { white-space: normal !important; overflow-wrap: anywhere; }
+  .aura-detail-header .aura-detail-actions { margin-left: auto; }
+}

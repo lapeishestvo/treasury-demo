@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accounts — Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/ColHeader.js"></script>
+<script src="components/TableCell.js"></script>
+<script src="components/Chip.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FilterDropdown.js"></script>
+<script src="components/SideMenu.js?v=positions-1"></script>
+<script src="components/Island.js"></script>
+<script src="components/UiPrimitives.js"></script>
+<script src="components/AccountTableRow.js"></script>
+<script src="components/TableLayout.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: none; }
+.scrollable::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollable::-webkit-scrollbar-track { background: transparent; }
+.scrollable::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.scrollable:hover { scrollbar-width: thin; scrollbar-color: var(--aura-border-tertiary) transparent; }
+.scrollable:hover::-webkit-scrollbar-thumb { background: var(--aura-border-tertiary); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const T = AuraTokens;
+
+const STATUS_VARIANT = {
+  'Active':               'success-secondary',
+  'Draft':                'neutral-secondary',
+  'Waiting for approval': 'warning-secondary',
+  'Declined':             'error-secondary',
+  'Superseded':           'neutral-tertiary',
+  'Inactive':             'neutral-tertiary',
+  'Archived':             'neutral-tertiary',
+  'Trashed':              'neutral-tertiary',
+};
+const OPEN_STATUSES = new Set(['Draft', 'Active', 'Waiting for approval', 'Declined']);
+
+const STATIC_ROWS = [
+  { id: 1, name: 'Main Operating Account',   number: '—', description: '—', currency: 'MXN', type: 'NOSTRO',     owner: 'DIF Holdings',    custodian: 'BBVA Custody',     status: 'Active',               from: '2024-01-01', to: '—' },
+  { id: 2, name: 'Settlement Account',       number: '—', description: '—', currency: 'MXN', type: 'NOSTRO',     owner: 'DIF Holdings',    custodian: 'Citi Securities',  status: 'Active',               from: '2023-03-15', to: '—' },
+  { id: 3, name: 'Bond Custody Account',     number: '—', description: '—', currency: 'MXN', type: 'INVESTMENT', owner: 'DIF Asset Mgmt',  custodian: 'Banorte Custodia', status: 'Active',               from: '2022-06-01', to: '—' },
+  { id: 4, name: 'Payments Account',         number: '—', description: '—', currency: 'MXN', type: 'NOSTRO',     owner: 'DIF Europe S.A.', custodian: 'Santander Sec.',   status: 'Active',               from: '2023-09-10', to: '—' },
+  { id: 5, name: 'Reserve Account',          number: '—', description: '—', currency: 'MXN', type: 'INTERNAL',   owner: 'DIF Holdings',    custodian: 'HSBC Securities',  status: 'Waiting for approval', from: '2026-04-01', to: '—' },
+  { id: 6, name: 'CETES Investment Account', number: '—', description: '—', currency: 'MXN', type: 'INVESTMENT', owner: 'DIF Asset Mgmt',  custodian: 'Banamex Valores',  status: 'Active',               from: '2023-01-01', to: '—' },
+  { id: 7, name: 'Treasury Account',         number: '—', description: '—', currency: 'MXN', type: 'NOSTRO',     owner: 'DIF Europe S.A.', custodian: 'Barclays Sec.',    status: 'Draft',                from: '—',          to: '—' },
+  { id: 8, name: 'Legacy Settlement Acct',   number: '—', description: '—', currency: 'MXN', type: 'NOSTRO',     owner: 'DIF Holdings',    custodian: 'Scotia Valores',   status: 'Inactive',             from: '2020-01-01', to: '2025-12-31' },
+  { id: 9, name: 'Custody Account',          number: '—', description: '—', currency: 'MXN', type: 'INVESTMENT', owner: 'DIF Asset Mgmt',  custodian: 'JPM Custody',      status: 'Superseded',           from: '2021-07-01', to: '2026-04-28' },
+  { id: 10, name: 'Operating Reserve Fund',  number: '—', description: '—', currency: 'MXN', type: 'INTERNAL',   owner: 'DIF Holdings',    custodian: 'BBVA Custody',     status: 'Waiting for approval', from: '2026-05-01', to: '—' },
+  { id: 11, name: 'Correspondent Acct',      number: '—', description: '—', currency: 'MXN', type: 'NOSTRO',     owner: 'DIF Europe S.A.', custodian: 'UBS Securities',   status: 'Draft',                from: '—',          to: '—' },
+  { id: 12, name: 'Instruments Custody',     number: '—', description: '—', currency: 'MXN', type: 'INVESTMENT', owner: 'DIF Asset Mgmt',  custodian: 'Banorte Custodia', status: 'Archived',             from: '2021-03-01', to: '2026-03-01' },
+  { id: 13, name: 'MXN Payroll Account',     number: '—', description: '—', currency: 'MXN', type: 'INTERNAL',   owner: 'DIF Holdings',    custodian: 'Banamex Valores',  status: 'Declined',             from: '2026-02-15', to: '—' },
+  { id: 14, name: 'Repo Collateral Account', number: '—', description: '—', currency: 'MXN', type: 'INVESTMENT', owner: 'DIF Asset Mgmt',  custodian: 'BBVA Custody',     status: 'Trashed',              from: '2020-06-01', to: '2025-06-01' },
+];
+
+const FILTER_DEFS = [
+  { key: 'type',      label: 'Type' },
+  { key: 'status',    label: 'Status' },
+  { key: 'owner',     label: 'Owner' },
+  { key: 'custodian', label: 'Custodian' },
+];
+
+const COLS = [
+  { key: 'name',      label: 'Account Name', width: 272, sortable: true  },
+  { key: 'type',      label: 'Type',         width: 144, sortable: false },
+  { key: 'owner',     label: 'Owner',        width: 184, sortable: false },
+  { key: 'custodian', label: 'Custodian',    width: 184, sortable: false },
+  { key: 'validity',  label: 'Validity',     width: 224, sortable: false },
+  { key: 'status',    label: 'Status',       width: 192, sortable: false },
+];
+const MIN_TABLE_W = 1200;
+const totalWidth = Math.max(COLS.reduce((s, c) => s + c.width, 0), MIN_TABLE_W);
+
+function App() {
+  const [openFilter, setOpenFilter] = React.useState(null);
+  const [activeFilters, setActiveFilters] = React.useState({});
+  const [sortState, setSortState] = React.useState({ key: 'name', dir: 'asc' });
+  const typeAnchorRef = React.useRef(null);
+  const statusAnchorRef = React.useRef(null);
+  const ownerAnchorRef = React.useRef(null);
+  const custodianAnchorRef = React.useRef(null);
+  const [allRows, setAllRows] = React.useState(() => {
+    const saved = JSON.parse(localStorage.getItem('aura_accounts') || '[]');
+    return [...saved, ...STATIC_ROWS];
+  });
+
+  const toggleFilterValue = (key, value) => {
+    if (value === null) { setActiveFilters(prev => { const n = {...prev}; delete n[key]; return n; }); return; }
+    setActiveFilters(prev => {
+      const cur = prev[key] || [];
+      const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
+      if (!next.length) { const n = {...prev}; delete n[key]; return n; }
+      return {...prev, [key]: next};
+    });
+  };
+  const setFilterValues = (key, values) => {
+    setActiveFilters(prev => {
+      if (!values || !values.length) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: values };
+    });
+  };
+  const handleSort = key => setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'asc' });
+
+  const filtered = allRows.filter(row => Object.entries(activeFilters).every(([k, vals]) => vals.includes(row[k])));
+  const sorted = [...filtered].sort((a, b) => {
+    const va = a[sortState.key] || '', vb = b[sortState.key] || '';
+    return sortState.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  const activeFilterCount = Object.values(activeFilters).reduce((s, v) => s + v.length, 0);
+
+  const handleRowClick = (row) => {
+    localStorage.setItem('aura_account_view', JSON.stringify(row));
+    window.location.href = 'Account.html';
+  };
+
+  const filterAnchorRefs = {
+    type: typeAnchorRef,
+    status: statusAnchorRef,
+    owner: ownerAnchorRef,
+    custodian: custodianAnchorRef,
+  };
+
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Directories' }, { label: 'Accounts' }]} user="treasury.demo@plata.local">
+      <PageWorkspace>
+        <SideMenu activeSectionKey="reference" activeItemKey="accounts" />
+        <StackColumn flex={1} minWidth={MIN_TABLE_W} gap={8}>
+
+          <Island style={{ minWidth: MIN_TABLE_W }} gap={T.spacing.base} background={T.colors.bgNeutralBase}>
+            <ToolbarTile minHeight={72} gap={20}>
+              <PageTitle label="Accounts" />
+              <FlexSpacer />
+              <PrimaryActionButton label="New account" icon={T.icons.plusBig} onClick={() => window.location.href = 'Account.html?mode=create'} />
+            </ToolbarTile>
+
+            <ToolbarTile minHeight={80} gap={8}>
+              {FILTER_DEFS.map(f => {
+                const vals = activeFilters[f.key] || [];
+                const isOpen = openFilter === f.key;
+                return (
+                  <RelativeInline key={f.key} innerRef={filterAnchorRefs[f.key]}>
+                    <Chip
+                      label={f.label}
+                      active={vals.length > 0}
+                      count={vals.length}
+                      showChevron={true}
+                      onClick={() => setOpenFilter(prev => prev === f.key ? null : f.key)}
+                    />
+                    {isOpen && (
+                      <FilterDropdown
+                        filterKey={f.key}
+                        rows={allRows}
+                        activeValues={vals}
+                        onToggle={toggleFilterValue}
+                        onSetValues={setFilterValues}
+                        onClose={() => setOpenFilter(null)}
+                        anchorRef={filterAnchorRefs[f.key]}
+                      />
+                    )}
+                  </RelativeInline>
+                );
+              })}
+              {activeFilterCount > 0 && (
+                <TextActionButton
+                  label="Clear all"
+                  onClick={() => setActiveFilters({})}
+                  icon={<CloseIcon16 />}
+                />
+              )}
+            </ToolbarTile>
+          </Island>
+
+          <Island style={{ flex: 1, minWidth: MIN_TABLE_W, minHeight: 0 }}>
+            <ScrollColumn x="auto" y="auto">
+              <StackColumn minWidth={totalWidth} flex={1} gap={0}>
+                <StickyTableHeader>
+                  {COLS.map((col, i) => (
+                    <ColHeader key={col.key} label={col.label} width={col.width} sortKey={col.key} sortable={col.sortable} sortState={sortState} onSort={handleSort} align={col.align} first={i === 0} last={i === COLS.length - 1} />
+                  ))}
+                </StickyTableHeader>
+                {sorted.map((row, i) => {
+                  const validity = OPEN_STATUSES.has(row.status)
+                    ? (row.from === '—' ? '—' : `${row.from} – Indefinite`)
+                    : `${row.from} – ${row.to}`;
+                  return (
+                    <AccountTableRow key={i} row={row} columns={COLS} validity={validity} statusVariant={STATUS_VARIANT[row.status]} onClick={() => handleRowClick(row)} />
+                  );
+                })}
+                {sorted.length === 0 && (
+                  <EmptyState label="No accounts found" />
+                )}
+              </StackColumn>
+            </ScrollColumn>
+          </Island>
+        </StackColumn>
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

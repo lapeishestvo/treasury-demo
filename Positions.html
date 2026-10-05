@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Positions - Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js?v=positions-1"></script>
+<script src="components/AssetIcon.js"></script>
+<script src="components/ColHeader.js?v=positions-1"></script>
+<script src="components/TableCell.js?v=positions-1"></script>
+<script src="components/Chip.js?v=positions-1"></script>
+<script src="components/CheckboxControl.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FilterDropdown.js"></script>
+<script src="components/SideMenu.js?v=positions-1"></script>
+<script src="components/Island.js"></script>
+<script src="components/UiPrimitives.js?v=positions-1"></script>
+<script src="components/ToolbarIcons.js"></script>
+<script src="components/SearchBar.js?v=positions-1"></script>
+<script src="components/TableLayout.js"></script>
+<script src="components/FilterChip.js?v=positions-1"></script>
+<script src="components/ChoiceChip.js"></script>
+<script src="components/PositionTable.js?v=lots-1"></script>
+<script src="PortfolioData.js?v=lots-1"></script>
+<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
+<script src="HoldingsLedger.js?v=lots-3"></script>
+<script src="TradeStore.js?v=lots-1"></script>
+<script src="PositionData.js?v=lots-2"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: thin; scrollbar-color: var(--aura-border-tertiary) transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const GROUP_OPTIONS = [{ key: 'portfolio', label: 'Portfolio' }, { key: 'instrument', label: 'Instrument' }, { key: 'book', label: 'Book' }];
+function App() {
+  const [positions, setPositions] = React.useState([]);
+  const [loadError, setLoadError] = React.useState('');
+  const [groupBy, setGroupBy] = React.useState('portfolio');
+  const [query, setQuery] = React.useState('');
+  const [maturityDates, setMaturityDates] = React.useState([]);
+  const [openMenu, setOpenMenu] = React.useState(null);
+  const [sort, setSort] = React.useState(null);
+  React.useEffect(() => {
+    function refresh() {
+      try {
+        setPositions(PositionStore.list(PortfolioStore.list()));
+        const issues = PositionStore.issues();
+        setLoadError(issues.length ? 'Some trades need attention: ' + issues.map(issue => issue.ticket + ': ' + issue.message).join(' ') : '');
+      }
+      catch (_) { setLoadError('Unable to load positions. Please reload the page.'); }
+    }
+    refresh();
+    window.addEventListener('pageshow', refresh);
+    window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('pageshow', refresh); window.removeEventListener('storage', refresh); };
+  }, []);
+  const dates = Array.from(new Set(positions.map(row => row.maturityDate))).sort().map(date => ({ key: date, label: date }));
+  const groups = PositionStore.group(PositionStore.filter(positions, query, maturityDates), groupBy, sort);
+  function sortBy(key) {
+    setSort(previous => previous?.key !== key ? { key, dir: 'asc' } : previous.dir === 'asc' ? { key, dir: 'desc' } : null);
+  }
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Portfolios' }, { label: 'Positions' }]} user="treasury.demo@plata.local">
+      <PageWorkspace>
+        <SideMenu activeSectionKey="portfolios" activeItemKey="positions" />
+        <StackColumn flex={1} minWidth={0} minHeight={0} flexShrink={1}>
+          <Island gap={4} background={AuraTokens.colors.bgNeutralBase}>
+            <ToolbarTile minHeight={80} scrollable={true}>
+              <PageTitle label="Positions" /><FlexSpacer />
+              <SearchBar label="Search positions" value={query} onChange={setQuery} icon={<AssetIcon src="assets/icons/position-search.svg" size={16} />} />
+            </ToolbarTile>
+            <ToolbarTile minHeight={80} scrollable={true}>
+              <ChoiceChip label={'Group by ' + groupBy} options={GROUP_OPTIONS} value={groupBy}
+                icon={<AssetIcon src="assets/icons/position-group.svg" size={16} naturalSize={16} />}
+                chevronElement={<AssetIcon src="assets/icons/position-chip-chevron.svg" size={16} naturalSize={16} />}
+                open={openMenu === 'group'} onOpenChange={open => setOpenMenu(open ? 'group' : null)} onChange={setGroupBy} />
+              <FilterChip label="Maturity date" options={dates} selectedKeys={maturityDates} onChange={setMaturityDates}
+                gap={4} chevronElement={<AssetIcon src="assets/icons/position-chip-chevron.svg" size={16} naturalSize={16} />}
+                open={openMenu === 'maturity'} onOpenChange={open => setOpenMenu(open ? 'maturity' : null)} />
+              {maturityDates.length || query ? <TextActionButton label="Clear all" icon={<CloseIcon16 />} onClick={() => { setMaturityDates([]); setQuery(''); }} /> : null}
+            </ToolbarTile>
+          </Island>
+          {loadError ? <EmptyState label={loadError} /> : <PositionTable key={groupBy} groupBy={groupBy} groups={groups} sort={sort} onSort={sortBy}
+            onOpen={row => window.location.href = 'Position.html?' + new URLSearchParams({ portfolioId: row.portfolioId, instrument: row.instrument })} />}
+        </StackColumn>
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

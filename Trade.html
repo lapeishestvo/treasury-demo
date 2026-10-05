@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade — Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/TradeTypeBadge.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FormPageHeader.js"></script>
+<script src="components/AuraStepper.js"></script>
+<script src="components/Island.js"></script>
+<script src="components/SectionHeader.js"></script>
+<script src="components/Fieldset.js"></script>
+<script src="components/ReviewRow.js"></script>
+<script src="components/ButtonStack.js"></script>
+<script src="components/InputField.js"></script>
+<script src="components/TextareaField.js"></script>
+<script src="components/SelectField.js?v=trade-portfolio-1"></script>
+<script src="components/SegmentedControl.js"></script>
+<script src="components/InlineMathRow.js"></script>
+<script src="components/UploadBox.js"></script>
+<script src="components/FormSection.js"></script>
+<script src="components/ViewSection.js"></script>
+<script src="components/UiPrimitives.js?v=trade-portfolio-1"></script>
+<script src="components/AttachmentsField.js"></script>
+<script src="components/WorkflowFeedback.js"></script>
+<script src="PortfolioData.js?v=lots-1"></script>
+<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
+<script src="HoldingsLedger.js?v=lots-3"></script>
+<script src="TradeStore.js?v=lots-1"></script>
+<script src="components/SecurityTradeForms.js?v=lots-1"></script>
+<script src="components/SecurityTradePanels.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: none; }
+.scrollable::-webkit-scrollbar { display: none; }
+input, textarea { font-family: var(--aura-font-family, 'Inter', sans-serif); }
+@keyframes tile-flash {
+  0%   { background-color: var(--aura-bg-accent-light); }
+  35%  { background-color: var(--aura-bg-accent-light); }
+  100% { background-color: var(--aura-bg-neutral-primary); }
+}
+.tile-flash {
+  animation: tile-flash 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const T = AuraTokens;
+
+const STEPPER_W = 240;
+const CONTENT_W = 520;
+const OUTER_PAD = 20;
+const TRADE_TICKET = '100050';
+const DEFAULT_AUTHOR = 'Alejandro Hernández';
+const STATUS_LABELS = {
+  draft: 'Draft',
+  pending_approval: 'Pending approval',
+  pending_mo_reconciliation: 'Pending reconcillation',
+  pending_settlement: 'Pending settlement',
+  counterparty_confirmed: 'Counterparty confirmed',
+  settling: 'Settling',
+  pending_mo_settlement_confirmation: 'Pending settlement approval',
+  settled: 'Settled',
+  returned_to_fo: 'Returned',
+  returned_to_bo: 'Settlement returned',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+};
+const STATUS_VARIANTS = {
+  draft: 'neutral-secondary',
+  pending_approval: 'warning-secondary',
+  pending_mo_reconciliation: 'accent-secondary',
+  pending_settlement: 'accent-secondary',
+  counterparty_confirmed: 'accent-secondary',
+  settling: 'accent-secondary',
+  pending_mo_settlement_confirmation: 'warning-secondary',
+  settled: 'success-secondary',
+  returned_to_fo: 'error-tertiary',
+  returned_to_bo: 'error-tertiary',
+  declined: 'error-secondary',
+  cancelled: 'neutral-secondary',
+};
+const BASE_STEPS = [
+  { label: 'Main info', anchor: 'section-main-info' },
+  { label: 'When', anchor: 'section-when' },
+  { label: 'How much', anchor: 'section-how-much' },
+  { label: 'Accounting', anchor: 'section-accounting' },
+];
+const STEP_REQUIRED_FIELDS = {
+  'section-main-info': ['tradeType', 'instrument', 'portfolioId', 'counterparty', 'custodian', 'executionMethod'],
+  'section-when': ['tradeDate', 'tradeTime', 'term', 'settlementDate'],
+  'section-how-much': ['quantity', 'rate', 'price'],
+  'section-accounting': ['strategy'],
+  'section-counterparty': ['confirmationMethod', 'confirmationNumber', 'contactPerson', 'confirmationDate', 'confirmationTime', 'matchState'],
+  'section-settlement': ['bankReference', 'settlementAccount', 'settlementDateFinal', 'amount', 'currency', 'fee', 'custodianReference', 'settlementSide'],
+};
+const MODES = new Set([
+  'edit',
+  'review',
+  'approval_detail',
+  'mo_reconciliation_detail',
+  'mo_reconciliation_review',
+  'counterparty_form',
+  'counterparty_review',
+  'settlement_form',
+  'settlement_review',
+  'bo_approval_detail',
+  'bo_approval_review',
+  'mo_settlement_confirmation_detail',
+  'settled_detail',
+]);
+const INSTRUMENT_OPTIONS = [
+  'BI_CETES_260917',
+  'BI_CETES_260924',
+  'BI_CETES_261001',
+  'BI_CETES_261008',
+  'BI_CETES_261015',
+  'BI_CETES_261022',
+  'BI_CETES_261029',
+  'BI_CETES_261105',
+  'BI_CETES_261112',
+  'BI_CETES_261119',
+];
+const COUNTERPARTY_OPTIONS = ['Banorte', 'BBVA', 'Santander', 'HSBC'];
+const CUSTODIAN_OPTIONS = ['INDEVAL', 'BBVA Custody'];
+const EXECUTION_METHOD_OPTIONS = ['Phone', 'Broker', 'Email', 'SWIFT'];
+const TERM_OPTIONS = ['T+0', 'T+1', 'T+2'];
+const STRATEGY_OPTIONS = ['Available for Sale (AFS)', 'Hold to Maturity (HTM)'];
+const REVIEWER_DEFAULTS = {
+  returned_to_fo: {
+    comment: 'Please update the trade details and resubmit for approval.',
+    reviewer: 'Alejandro Hernández',
+    reviewedAt: '2026-06-25',
+  },
+  returned_to_bo: {
+    comment: 'Wrong settlement account. Please correct the settlement details.',
+    reviewer: 'Lucía Ramírez',
+    reviewedAt: '2026-06-25',
+  },
+  declined: {
+    comment: 'Trade cannot be approved in its current form.',
+    reviewer: 'Alejandro Hernández',
+    reviewedAt: '2026-06-25',
+  },
+};
+
+function hasFilledValue(value) {
+  if (value === true || value === false) return true;
+  return String(value == null ? '' : value).trim() !== '';
+}
+
+function isTradeStepComplete(anchor, form) {
+  var fields = STEP_REQUIRED_FIELDS[anchor] || [];
+  if (!fields.length) return false;
+  var complete = fields.every(function(field) { return hasFilledValue(form[field]); });
+  if (anchor === 'section-settlement') {
+    complete = complete && (hasFilledValue(form.netAmount) || (hasFilledValue(form.amount) && hasFilledValue(form.fee)));
+  }
+  return complete;
+}
+
+function getFieldFocusTarget(field) {
+  if (!field) return null;
+  if (field.matches && field.matches('input:not([readonly]), textarea:not([readonly]), button:not([disabled]), [tabindex]:not([tabindex="-1"])')) {
+    return field;
+  }
+  return field.querySelector('input:not([readonly]), textarea:not([readonly]), button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+}
+
+function focusFirstEmptyFieldInStep(anchor) {
+  var section = document.getElementById(anchor);
+  if (!section) return false;
+  var field = section.querySelector('[data-stepper-field][data-stepper-empty="true"]') ||
+    section.querySelector('[data-stepper-field]');
+  var target = getFieldFocusTarget(field);
+  if (!target || typeof target.focus !== 'function') return false;
+  target.focus({ preventScroll: true });
+  return true;
+}
+const LEGACY_TICKET_MAP = {
+  BI_CETES_260410: '100010',
+  BI_BONOS_280310: '100009',
+  BI_CETES_260205: '100008',
+  BI_UDIBONO_281: '100007',
+  BI_MBONO_260501: '100006',
+  BI_CETES_260219: '100005',
+  BI_UDIBONO_321: '100004',
+  BI_CETES_260226: '100003',
+  BI_BONOS_430610: '100002',
+  BI_MBONO_280301: '100001',
+};
+
+function getInitialMode() {
+  const url = new URL(window.location.href);
+  const mode = url.searchParams.get('mode') || 'edit';
+  return MODES.has(mode) ? mode : 'edit';
+}
+
+function getDefaultStatusForMode(mode) {
+  if (mode === 'edit' || mode === 'review') return 'draft';
+  if (mode === 'approval_detail') return 'pending_approval';
+  if (mode === 'mo_reconciliation_detail' || mode === 'mo_reconciliation_review') return 'pending_mo_reconciliation';
+  if (mode === 'counterparty_form' || mode === 'counterparty_review') return 'pending_settlement';
+  if (mode === 'settlement_form' || mode === 'settlement_review') return 'counterparty_confirmed';
+  if (mode === 'bo_approval_detail' || mode === 'bo_approval_review') return 'settling';
+  if (mode === 'mo_settlement_confirmation_detail') return 'pending_mo_settlement_confirmation';
+  if (mode === 'settled_detail') return 'settled';
+  return 'draft';
+}
+
+function getDefaultModeForStatus(status) {
+  if (status === 'pending_approval') return 'approval_detail';
+  if (status === 'pending_mo_reconciliation') return 'mo_reconciliation_detail';
+  if (status === 'pending_settlement') return 'counterparty_form';
+  if (status === 'counterparty_confirmed') return 'settlement_form';
+  if (status === 'settling') return 'bo_approval_detail';
+  if (status === 'pending_mo_settlement_confirmation') return 'mo_settlement_confirmation_detail';
+  if (status === 'returned_to_fo') return 'edit';
+  if (status === 'returned_to_bo') return 'settlement_form';
+  if (status === 'settled' || status === 'declined' || status === 'cancelled') return 'settled_detail';
+  return null;
+}
+
+function inferInstrumentType(label) {
+  const value = String(label || '').toUpperCase();
+  if (value.includes('UDIBONO')) return 'UDIBONO';
+  if (value.includes('BONO')) return 'BONOS';
+  return 'CETES';
+}
+
+function deriveLegacyTicketNumber(value) {
+  var mapped = LEGACY_TICKET_MAP[value];
+  if (mapped) return mapped;
+  var digits = String(value || '').match(/(\d{3,})$/);
+  if (digits) return digits[1];
+  return String(value || '');
+}
+
+function normalizeTicketValue(ticket) {
+  if (ticket == null) return '';
+  var raw = String(ticket);
+  if (/^\d+$/.test(raw)) return raw;
+  if (raw.indexOf('BI_') === 0) return deriveLegacyTicketNumber(raw);
+  return raw;
+}
+
+function normalizeDateString(value) {
+  var raw = String(value || '').trim();
+  if (!raw || raw === '—') return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  var legacyMatch = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (legacyMatch) return legacyMatch[3] + '-' + legacyMatch[2] + '-' + legacyMatch[1];
+  return raw;
+}
+
+function getTermDayOffset(term) {
+  var match = String(term || '').trim().match(/^T\+(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
+
+function addDaysToIsoDate(isoDate, days) {
+  var match = String(isoDate || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match || !Number.isFinite(days)) return '';
+  var year = Number(match[1]);
+  var month = Number(match[2]);
+  var day = Number(match[3]);
+  var date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) return '';
+  date.setUTCDate(date.getUTCDate() + days);
+  return [
+    String(date.getUTCFullYear()),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function calculateSettlementDate(tradeDate, term) {
+  var offset = getTermDayOffset(term);
+  if (offset === null) return '';
+  return addDaysToIsoDate(tradeDate, offset);
+}
+
+function normalizeAuthorName(value) {
+  var raw = String(value || '').trim();
+  if (!raw || raw === 'Treasury Demo') return DEFAULT_AUTHOR;
+  return raw;
+}
+
+function getInitialTradeContext() {
+  const url = new URL(window.location.href);
+  const mode = getInitialMode();
+  const rawTicket = url.searchParams.get('ticket') || '';
+  const ticket = normalizeTicketValue(rawTicket);
+  const savedRow = ticket ? loadSavedTrades().find(function(row) { return row.ticket === ticket; }) : null;
+  const status = (savedRow && savedRow.status) || url.searchParams.get('status') || getDefaultStatusForMode(mode);
+  const type = url.searchParams.get('type') || (savedRow && savedRow.type) || 'buy';
+  const instrumentLabel = url.searchParams.get('instrument') || (savedRow && savedRow.instrument) || 'BI_CETES_260917';
+  const instrumentCode = url.searchParams.get('instrumentCode') || (savedRow && savedRow.instrumentCode) || '';
+  const counterparty = url.searchParams.get('counterparty') || (savedRow && savedRow.counterparty) || 'Banorte';
+  const price = url.searchParams.get('price') ?? savedRow?.price ?? '9.99';
+  const qty = url.searchParams.get('qty') ?? savedRow?.qty ?? '500,000';
+  const total = url.searchParams.get('total') || (savedRow && savedRow.total) || '4,999,900';
+
+  return {
+    mode: savedRow ? getDefaultModeForStatus(savedRow.status) || mode : mode,
+    ticket,
+    status,
+    type,
+    instrumentLabel,
+    instrumentCode,
+    counterparty,
+    price,
+    qty,
+    total,
+    created: normalizeDateString(url.searchParams.get('created') || (savedRow && savedRow.created) || ''),
+    author: normalizeAuthorName(url.searchParams.get('author') || (savedRow && savedRow.author) || ''),
+    readonly: url.searchParams.get('readonly') === '1' || Boolean(savedRow && savedRow.readonly),
+    details: savedRow && savedRow.details ? savedRow.details : null,
+    portfolioId: url.searchParams.get('portfolioId') || '',
+  };
+}
+
+function loadSavedTrades() {
+  return TradeStore.list();
+}
+
+function formatToday() {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return yyyy + '-' + mm + '-' + dd;
+}
+
+function formatTicketDate() {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return yy + mm + dd;
+}
+
+function buildInitialForm(context) {
+  const isNewTrade = !context.ticket && context.mode === 'edit';
+  const details = context.details || {};
+  const totalWithCurrency = isNewTrade ? '' : 'MXN ' + context.total;
+  const legacyTradeTime = String(details.tradeTime || '').trim();
+  const seedCounterpartyDetails =
+    context.mode === 'settlement_form' ||
+    context.mode === 'counterparty_review' ||
+    context.mode === 'settlement_review' ||
+    context.mode === 'bo_approval_detail' ||
+    context.mode === 'bo_approval_review' ||
+    context.mode === 'mo_settlement_confirmation_detail' ||
+    context.mode === 'settled_detail' ||
+    context.status === 'counterparty_confirmed' ||
+    context.status === 'settling' ||
+    context.status === 'pending_mo_settlement_confirmation' ||
+    context.status === 'settled';
+  const seedSettlementDetails =
+    context.mode === 'settlement_review' ||
+    context.mode === 'bo_approval_detail' ||
+    context.mode === 'bo_approval_review' ||
+    context.mode === 'mo_settlement_confirmation_detail' ||
+    context.mode === 'settled_detail' ||
+    context.status === 'settling' ||
+    context.status === 'pending_mo_settlement_confirmation' ||
+    context.status === 'settled';
+  const hydrateCounterpartyDetails =
+    context.mode === 'counterparty_review' ||
+    context.mode === 'settlement_form' ||
+    context.mode === 'settlement_review' ||
+    context.mode === 'bo_approval_detail' ||
+    context.mode === 'bo_approval_review' ||
+    context.mode === 'mo_settlement_confirmation_detail' ||
+    context.mode === 'settled_detail' ||
+    context.status === 'counterparty_confirmed' ||
+    context.status === 'settling' ||
+    context.status === 'pending_mo_settlement_confirmation' ||
+    context.status === 'returned_to_bo' ||
+    context.status === 'settled';
+  const hydrateSettlementDetails =
+    context.mode === 'settlement_review' ||
+    context.mode === 'bo_approval_detail' ||
+    context.mode === 'bo_approval_review' ||
+    context.mode === 'mo_settlement_confirmation_detail' ||
+    context.mode === 'settled_detail' ||
+    context.status === 'settling' ||
+    context.status === 'pending_mo_settlement_confirmation' ||
+    context.status === 'returned_to_bo' ||
+    context.status === 'settled';
+  const reviewDefaults = REVIEWER_DEFAULTS[context.status] || null;
+  return {
+    tradeType: details.tradeType || context.type,
+    instrumentType: details.instrumentType || (isNewTrade ? '' : inferInstrumentType(context.instrumentLabel)),
+    instrument: details.instrument ?? details.instrumentCode ?? (isNewTrade ? context.instrumentCode : (context.instrumentCode || context.instrumentLabel || '')),
+    portfolioId: details.portfolioId || context.portfolioId || '',
+    portfolioName: details.portfolioName || PortfolioStore.find(context.portfolioId)?.name || '',
+    counterpartyTrader: details.counterpartyTrader || '',
+    counterparty: details.counterparty ?? (isNewTrade ? '' : context.counterparty),
+    contract: details.contract || (isNewTrade ? '' : 'Banorte'),
+    custodian: details.custodian ?? (isNewTrade ? '' : 'INDEVAL'),
+    executionMethod: details.executionMethod ?? (isNewTrade ? '' : 'Phone'),
+    tradeDate: details.tradeDate ?? (isNewTrade ? '' : '2026-03-20'),
+    tradeTime: legacyTradeTime ? legacyTradeTime.replace(/\s*\b(am|pm)\b/i, '').trim() : (isNewTrade ? '' : '11:53'),
+    term: details.term ?? (isNewTrade ? '' : 'T+1'),
+    settlementDate: details.settlementDate ?? (isNewTrade ? '' : '2027-03-20'),
+    book: details.book || (isNewTrade ? '' : 'Banking book'),
+    quantity: details.quantity ?? (isNewTrade ? '' : context.qty),
+    price: details.price ?? (isNewTrade ? '' : context.price),
+    purchaseAmount: stripMxnLabel(details.purchaseAmount) || '',
+    ytm: details.ytm || (isNewTrade ? '' : '9.410'),
+    rate: details.rate ?? (isNewTrade ? '' : '9.410'),
+    strategy: details.strategy ?? (isNewTrade ? '' : 'Available for Sale (AFS)'),
+    moConfirmationReference: details.moConfirmationReference || '',
+    moConfirmationDateTime: details.moConfirmationDateTime || '',
+    moDetailsMatch: typeof details.moDetailsMatch === 'boolean' ? details.moDetailsMatch : true,
+    moDiscrepancyNotes: details.moDiscrepancyNotes || '',
+    confirmationNumber: hydrateCounterpartyDetails ? (details.confirmationNumber || (seedCounterpartyDetails ? 'Cp-778245' : '')) : '',
+    contactPerson: hydrateCounterpartyDetails ? (details.contactPerson || (seedCounterpartyDetails ? 'María López' : '')) : '',
+    confirmationDate: hydrateCounterpartyDetails ? (details.confirmationDate || (seedCounterpartyDetails ? '2026-03-20' : '')) : '',
+    confirmationTime: hydrateCounterpartyDetails ? (details.confirmationTime || (seedCounterpartyDetails ? '12:08 PM' : '')) : '',
+    confirmationMethod: hydrateCounterpartyDetails ? (details.confirmationMethod || (seedCounterpartyDetails ? 'Email' : '')) : '',
+    matchState: details.matchState || 'matched',
+    comment: (context.mode === 'counterparty_form' || context.mode === 'settlement_form') ? '' : (details.comment || ''),
+    reviewComment: details.reviewComment || (reviewDefaults ? reviewDefaults.comment : ''),
+    reviewedBy: details.reviewedBy || (reviewDefaults ? reviewDefaults.reviewer : ''),
+    reviewedAt: details.reviewedAt || (reviewDefaults ? reviewDefaults.reviewedAt : ''),
+    bankReference: hydrateSettlementDetails ? (details.bankReference || '') : '',
+    settlementAccount: hydrateSettlementDetails ? (details.settlementAccount || (isNewTrade ? '' : '')) : '',
+    settlementDateFinal: hydrateSettlementDetails ? (details.settlementDateFinal || (seedSettlementDetails ? '2026-03-31' : '')) : '',
+    amount: hydrateSettlementDetails ? (stripMxnLabel(details.amount) || (seedSettlementDetails ? stripMxnLabel(totalWithCurrency) : '')) : '',
+    currency: hydrateSettlementDetails ? (details.currency || 'MXN') : '',
+    fee: hydrateSettlementDetails ? (stripMxnLabel(details.fee) || (seedSettlementDetails ? '900' : '')) : '',
+    netAmount: hydrateSettlementDetails ? (stripMxnLabel(details.netAmount) || (seedSettlementDetails ? stripMxnLabel(totalWithCurrency) : '')) : '',
+    custodianReference: hydrateSettlementDetails ? (details.custodianReference || '') : '',
+    settlementSide: hydrateSettlementDetails ? (details.settlementSide || context.type) : context.type,
+    moCustodianStatementReference: details.moCustodianStatementReference || '',
+    moStatementMatch: typeof details.moStatementMatch === 'boolean' ? details.moStatementMatch : true,
+    moSettlementDiscrepancyNotes: details.moSettlementDiscrepancyNotes || '',
+  };
+}
+
+function formatMoney(value) {
+  const numeric = Number(String(value || '0').replace(/,/g, ''));
+  if (!Number.isFinite(numeric)) return '0';
+  return numeric.toLocaleString('en-US');
+}
+
+function normalizeMxnLabel(value) {
+  var raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.indexOf('MXN ') === 0) return raw;
+  if (raw.indexOf('MXN') === 0) return 'MXN ' + raw.slice(3).trim();
+  if (raw.indexOf('$') === 0) return 'MXN ' + raw.slice(1).trim();
+  return raw;
+}
+
+function stripMxnLabel(value) {
+  var raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.indexOf('$') === 0) return raw.slice(1).trim();
+  if (raw.indexOf('MXN ') === 0) return raw.slice(4).trim();
+  if (raw.indexOf('MXN') === 0) return raw.slice(3).trim();
+  return raw;
+}
+
+function formatMxnDisplay(value) {
+  var raw = String(value || '').trim();
+  if (!raw) return '';
+  var normalized = normalizeMxnLabel(raw);
+  return normalized === raw ? ('MXN ' + raw) : normalized;
+}
+
+function App() {
+  const initialContext = React.useMemo(() => getInitialTradeContext(), []);
+  const [mode, setModeState] = React.useState(initialContext.mode);
+  const [tradeStatus, setTradeStatus] = React.useState(initialContext.status);
+  const [form, setForm] = React.useState(() => buildInitialForm(initialContext));
+  const [formError, setFormError] = React.useState('');
+  const portfolios = PortfolioStore.list();
+  const portfolioOptions = portfolios.filter(item => SecurityTradeData.eligible(item, form.tradeType))
+    .map(item => ({ value: item.id, label: item.name }));
+  const currentTrades = TradeStore.list();
+  const inventory = HoldingsLedger.project(currentTrades.filter(row => row.ticket !== initialContext.ticket));
+  const availablePosition = inventory.positions.find(row => row.portfolioId === form.portfolioId && row.instrument === form.instrument);
+  const availableQuantity = availablePosition?.open || 0;
+  const instrumentOptions = Array.from(new Set(INSTRUMENT_OPTIONS.concat(currentTrades.map(row => row.instrumentCode).filter(Boolean))));
+  const selectableInstruments = form.tradeType === 'sell'
+    ? instrumentOptions.filter(code => inventory.positions.some(row => row.instrument === code && row.open > 0 && (!form.portfolioId || row.portfolioId === form.portfolioId)))
+    : instrumentOptions;
+  const [flashKeys, setFlashKeys] = React.useState({});
+  const [activeStepAnchor, setActiveStepAnchor] = React.useState(BASE_STEPS[0].anchor);
+  const scrollRef = React.useRef(null);
+  const scrollTarget = React.useRef(null);
+  const savedTop = React.useRef(null);
+  const savingTrade = React.useRef(false);
+
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    if (savedTop.current !== null) {
+      container.scrollTop = savedTop.current;
+      savedTop.current = null;
+    }
+    if (scrollTarget.current) {
+      const targetAnchor = scrollTarget.current;
+      const el = document.getElementById(targetAnchor);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        const contRect = container.getBoundingClientRect();
+        const nextTop = Math.max(0, container.scrollTop + (elRect.top - contRect.top) - 8);
+        container.scrollTo({ top: nextTop, behavior: 'smooth' });
+      }
+      scrollTarget.current = null;
+      window.setTimeout(function() {
+        focusFirstEmptyFieldInStep(targetAnchor);
+      }, 80);
+    }
+  });
+
+  function setMode(nextMode, nextStatus) {
+    savedTop.current = 0;
+    if (nextMode === 'settlement_form') {
+      setForm(function(prev) {
+        if (String(prev.currency || '').trim()) return prev;
+        return { ...prev, currency: 'MXN' };
+      });
+    }
+    setModeState(nextMode);
+    if (nextStatus) setTradeStatus(nextStatus);
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', nextMode);
+    url.searchParams.set('status', nextStatus || tradeStatus);
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  function onBack() {
+    window.location.href = 'Security Trades.html';
+  }
+
+  function updateField(key, value) {
+    setFormError('');
+    setForm(function(prev) {
+      var next = { ...prev, [key]: value };
+      if (key === 'portfolioId') {
+        var portfolio = portfolios.find(item => item.id === value);
+        next.portfolioName = portfolio ? portfolio.name : '';
+        next.book = portfolio ? portfolio.book : '';
+      }
+      if (key === 'tradeDate' || key === 'term') {
+        if (getTermDayOffset(next.term) !== null) {
+          var calculatedSettlementDate = calculateSettlementDate(next.tradeDate, next.term);
+          next.settlementDate = calculatedSettlementDate || '';
+        }
+      }
+      if (['instrument', 'rate', 'tradeDate', 'term'].includes(key)) {
+        next.price = SecurityTradeData.calculatePrice(next);
+      }
+      return next;
+    });
+  }
+
+  function generateTradeTicket() {
+    var max = Number(TRADE_TICKET);
+    loadSavedTrades().forEach(function(row) {
+      var value = Number(normalizeTicketValue(row.ticket));
+      if (Number.isFinite(value) && value > max) max = value;
+    });
+    Object.keys(LEGACY_TICKET_MAP).forEach(function(key) {
+      var value = Number(LEGACY_TICKET_MAP[key]);
+      if (Number.isFinite(value) && value > max) max = value;
+    });
+    return String(max + 1);
+  }
+
+  function buildInstrumentLabel() {
+    return form.instrument || initialContext.instrumentCode || initialContext.instrumentLabel || '—';
+  }
+
+function buildTradeRow(statusValue, modeValue, readonlyValue) {
+    const tradeTicket = initialContext.ticket || generateTradeTicket();
+    const totalValue = hasAmountInputs
+      ? formatMoney(Number(String(form.quantity).replace(/,/g, '')) * Number(String(form.price || '0').replace(/,/g, '')))
+      : '';
+    const reviewComment = (
+      statusValue === 'returned_to_fo' ||
+      statusValue === 'returned_to_bo' ||
+      statusValue === 'declined'
+    ) ? String(form.comment || '').trim() : (form.reviewComment || '');
+    const reviewerName =
+      mode === 'approval_detail' || mode === 'mo_reconciliation_detail' || mode === 'mo_reconciliation_review'
+        ? 'Alejandro Hernández'
+        : mode === 'bo_approval_detail' || mode === 'bo_approval_review' || mode === 'mo_settlement_confirmation_detail'
+          ? 'Lucía Ramírez'
+          : (form.reviewedBy || '');
+    const reviewedAt = (
+      statusValue === 'returned_to_fo' ||
+      statusValue === 'returned_to_bo' ||
+      statusValue === 'declined'
+    ) ? formatToday() : (form.reviewedAt || '');
+
+    const boundForm = SecurityTradeData.bind({ details: form, portfolioId: form.portfolioId }, PortfolioStore.list());
+    return {
+      ticket: tradeTicket,
+      instrument: buildInstrumentLabel(),
+      portfolioId: boundForm.portfolioId,
+      portfolioName: boundForm.portfolioName,
+      counterpartyTrader: form.counterpartyTrader,
+      rate: form.rate,
+      counterparty: form.counterparty || initialContext.counterparty || '—',
+      type: form.tradeType || initialContext.type || 'buy',
+      price: form.price || '',
+      qty: form.quantity || '',
+      total: totalValue || '—',
+      status: statusValue,
+      mode: modeValue,
+      readonly: !!readonlyValue,
+      created: initialContext.created || formatToday(),
+      author: initialContext.author || DEFAULT_AUTHOR,
+      instrumentCode: form.instrument || initialContext.instrumentCode || '',
+      contract: form.contract || '—',
+      custodian: form.custodian || '—',
+      tradeDate: form.tradeDate || initialContext.created || formatToday(),
+      settlementDate: form.settlementDate || initialContext.created || formatToday(),
+      term: form.term || 'T+1',
+      book: boundForm.book,
+      strategy: form.strategy || 'Available for Sale (AFS)',
+      ytm: form.rate ? form.rate + '%' : '',
+      maturityDate: form.instrument ? ('20' + String(form.instrument).split('_').pop().slice(0, 2) + '-' + String(form.instrument).split('_').pop().slice(2, 4) + '-' + String(form.instrument).split('_').pop().slice(4, 6)) : (initialContext.created || formatToday()),
+      interestAccrued1Day: '0',
+      totalInterestAccrued: '0',
+      realizedPnL: '0',
+      details: {
+        ...form,
+        portfolioId: boundForm.portfolioId,
+        portfolioName: boundForm.portfolioName,
+        book: boundForm.book,
+        reviewComment: reviewComment,
+        reviewedBy: reviewerName,
+        reviewedAt: reviewedAt,
+      },
+    };
+  }
+
+  async function persistTradeAndReturn(statusValue, modeValue, readonlyValue) {
+    if (savingTrade.current) return;
+    if ((mode === 'edit' || mode === 'review') && !validateTrade(statusValue !== 'draft')) return;
+    savingTrade.current = true;
+    try {
+      await TradeStore.transact(() => buildTradeRow(statusValue, modeValue, readonlyValue));
+      window.location.href = 'Security Trades.html';
+    } catch (error) { savingTrade.current = false; setFormError(error.message); }
+  }
+
+  async function persistTradeAndContinue(statusValue, modeValue, readonlyValue) {
+    if (savingTrade.current) return;
+    savingTrade.current = true;
+    try {
+      await TradeStore.transact(() => buildTradeRow(statusValue, modeValue, readonlyValue));
+      setMode(modeValue, statusValue);
+    } catch (error) { setFormError(error.message); }
+    finally { savingTrade.current = false; }
+  }
+
+  function validateTrade(complete) {
+    const portfolio = PortfolioStore.find(form.portfolioId);
+    let anchor = 'section-main-info';
+    let message = '';
+    if (!portfolio || !SecurityTradeData.eligible(portfolio, form.tradeType)) {
+      message = 'Select an available portfolio for this trade.';
+    } else if (complete) {
+      anchor = BASE_STEPS.map(step => step.anchor).find(section =>
+        STEP_REQUIRED_FIELDS[section].some(key => !String(form[key] ?? '').trim()));
+      if (anchor) message = anchor === 'section-how-much' && !form.price && form.rate
+        ? 'Check the instrument, rate and dates. Settlement date must not be after instrument maturity.'
+        : 'Complete the required fields before continuing.';
+    }
+    if (!message && String(form.quantity || '').trim()) {
+      const quantity = Number(String(form.quantity).replace(/,/g, ''));
+      if (!Number.isSafeInteger(quantity) || quantity <= 0) message = 'Quantity must be a positive whole number.';
+      else if (form.tradeType === 'sell') {
+        try {
+          HoldingsLedger.prepare({ ticket: initialContext.ticket || 'preview', type: 'sell', portfolioId: form.portfolioId,
+            instrument: form.instrument, instrumentCode: form.instrument, qty: form.quantity, status: 'draft', details: { ...form } }, TradeStore.list());
+        } catch (error) { message = error.message; }
+      }
+      if (message) anchor = 'section-how-much';
+    }
+    setFormError(message);
+    if (message) handleStepClick(anchor);
+    return !message;
+  }
+
+  function requireComment(message) {
+    if (!String(form.comment || '').trim()) {
+      window.alert(message || 'Enter comment');
+      return false;
+    }
+    return true;
+  }
+
+  function returnToFo() {
+    if (!requireComment('Enter comment')) return;
+    persistTradeAndReturn('returned_to_fo', 'edit', false);
+  }
+
+  function returnToBo() {
+    if (!requireComment('Enter comment')) return;
+    persistTradeAndReturn('returned_to_bo', 'settlement_form', false);
+  }
+
+  function handleStepClick(anchor) {
+    if (scrollRef.current) savedTop.current = scrollRef.current.scrollTop;
+    setActiveStepAnchor(anchor);
+    scrollTarget.current = anchor;
+    setFlashKeys((prev) => ({ ...prev, [anchor]: (prev[anchor] || 0) + 1 }));
+  }
+
+  const hasAmountInputs = Boolean(String(form.quantity || '').trim()) && Boolean(String(form.price || '').trim());
+  const sumLabel = hasAmountInputs
+    ? 'MXN ' + formatMoney(Number(String(form.quantity).replace(/,/g, '')) * Number(String(form.price || '0').replace(/,/g, '')))
+    : '';
+  const tradeTypeBadge = <TradeTypeBadge value={form.tradeType} />;
+
+  const mainInfoRows = [
+    { label: 'Trade type', value: tradeTypeBadge },
+    { label: 'Instrument', value: form.instrument },
+    { label: 'Portfolio', value: portfolios.find(item => item.id === form.portfolioId)?.name || form.portfolioName || '—' },
+    { label: 'Counterparty', value: form.counterparty },
+    { label: 'Counterparty trader', value: form.counterpartyTrader || '—' },
+    { label: 'Custodian', value: form.custodian },
+    { label: 'Execution method', value: form.executionMethod },
+  ];
+  const whenRows = [
+    { label: 'Trade date', value: form.tradeDate },
+    { label: 'Trade time', value: form.tradeTime || '—' },
+    { label: 'Term', value: form.term },
+    { label: 'Settlement date', value: form.settlementDate },
+  ];
+  const howMuchRows = [
+    { label: 'Quantity', value: form.quantity || '—' },
+    { label: 'Rate', value: form.rate ? form.rate + '%' : '—' },
+    { label: 'Price', value: form.price ? 'MXN ' + form.price : '—' },
+    { label: 'Sum', value: hasAmountInputs ? sumLabel : '—' },
+  ];
+  const accountingRows = [
+    { label: 'Strategy', value: form.strategy || '—' },
+  ];
+  const counterpartyRows = [
+    { label: 'Confirmation number', value: form.confirmationNumber || '—' },
+    { label: 'Contact person', value: form.contactPerson || '—' },
+    { label: 'Confirmation date & time', value: form.confirmationDate || form.confirmationTime ? `${form.confirmationDate || '—'} · ${form.confirmationTime || '—'}` : '—' },
+    { label: 'Confirmation method', value: form.confirmationMethod || '—' },
+    { label: 'Matching result', value: form.matchState === 'mismatch' ? 'Mismatch found' : 'Details matched' },
+  ];
+  const counterpartyCommentRows = [
+    { label: 'Comment', value: form.comment || '—' },
+  ];
+  const settlementRows = [
+    { label: 'Bank reference', value: form.bankReference || '—' },
+    { label: 'Settlement account', value: form.settlementAccount || '—' },
+    { label: 'Settlement date', value: form.settlementDateFinal || '—' },
+    { label: 'Amount', value: formatMxnDisplay(form.amount) || '—' },
+    { label: 'Currency', value: form.currency || '—' },
+    { label: 'Fee', value: formatMxnDisplay(form.fee) || '—' },
+    { label: 'Net amount', value: formatMxnDisplay(form.netAmount) || '—' },
+    { label: 'Custodian reference', value: form.custodianReference || '—' },
+  ];
+  const moReconciliationRows = [
+    { label: 'Confirmation reference', value: form.moConfirmationReference || '—' },
+    { label: 'Confirmation date & time', value: form.moConfirmationDateTime || '—' },
+    { label: 'Matching result', value: form.moDetailsMatch ? 'Details match' : 'Mismatch found' },
+  ];
+  const moReconciliationCommentRows = [
+    { label: 'Comment', value: form.comment || '—' },
+  ];
+  const boApprovalRows = [
+    { label: 'Custodian statement reference', value: form.moCustodianStatementReference || '—' },
+    { label: 'Statement result', value: form.moStatementMatch ? 'Statement matches' : 'Mismatch found' },
+  ].concat(form.moStatementMatch ? [] : [
+    { label: 'Discrepancy notes', value: form.moSettlementDiscrepancyNotes || '—' },
+  ]);
+  const boApprovalCommentRows = [
+    { label: 'Comment', value: form.comment || '—' },
+  ];
+  const workflowNote =
+    tradeStatus === 'returned_to_bo'
+      ? ''
+      : tradeStatus === 'returned_to_fo'
+        ? ''
+        : '';
+  const reviewerComment = form.reviewComment || (
+    tradeStatus === 'returned_to_fo' ||
+    tradeStatus === 'returned_to_bo' ||
+    tradeStatus === 'declined'
+      ? form.comment
+      : ''
+  );
+  const showReviewerCommentTile =
+    (
+      tradeStatus === 'returned_to_fo' ||
+      tradeStatus === 'returned_to_bo' ||
+      tradeStatus === 'declined'
+    ) && Boolean(String(reviewerComment || '').trim());
+
+  const hasRightColumn =
+    mode === 'approval_detail' ||
+    mode === 'mo_reconciliation_detail' || mode === 'mo_reconciliation_review' ||
+    mode === 'counterparty_form' ||
+    mode === 'counterparty_review' ||
+    mode === 'settlement_form' ||
+    mode === 'settlement_review' ||
+    mode === 'bo_approval_detail' ||
+    mode === 'bo_approval_review' ||
+    mode === 'mo_settlement_confirmation_detail' ||
+    showReviewerCommentTile;
+  const showCounterpartyTile =
+    mode === 'settlement_form' ||
+    mode === 'settlement_review' ||
+    mode === 'bo_approval_detail' ||
+    mode === 'bo_approval_review' ||
+    mode === 'mo_settlement_confirmation_detail' ||
+    mode === 'settled_detail' ||
+    tradeStatus === 'counterparty_confirmed' ||
+    tradeStatus === 'settling' ||
+    tradeStatus === 'pending_mo_settlement_confirmation' ||
+    tradeStatus === 'returned_to_bo' ||
+    tradeStatus === 'settled';
+  const showSettlementTile =
+    mode === 'bo_approval_detail' ||
+    mode === 'bo_approval_review' ||
+    mode === 'mo_settlement_confirmation_detail' ||
+    mode === 'settled_detail' ||
+    tradeStatus === 'settling' ||
+    tradeStatus === 'pending_mo_settlement_confirmation' ||
+    tradeStatus === 'returned_to_bo' ||
+    tradeStatus === 'settled';
+  const steps = React.useMemo(function() {
+    const next = BASE_STEPS.slice();
+    if (showCounterpartyTile) next.push({ label: 'Counterparty', anchor: 'section-counterparty' });
+    if (showSettlementTile) next.push({ label: 'Settlement', anchor: 'section-settlement' });
+    return next;
+  }, [showCounterpartyTile, showSettlementTile]);
+  const stepperSteps = React.useMemo(function() {
+    return steps.map(function(step) {
+      return Object.assign({}, step, {
+        completed: isTradeStepComplete(step.anchor, form),
+      });
+    });
+  }, [steps, form]);
+
+  React.useEffect(function() {
+    if (!steps.some(function(step) { return step.anchor === activeStepAnchor; })) {
+      setActiveStepAnchor(steps[0] ? steps[0].anchor : BASE_STEPS[0].anchor);
+    }
+  }, [steps, activeStepAnchor]);
+
+  React.useEffect(function() {
+    function handleFocusIn(event) {
+      var target = event.target;
+      if (!target || !target.closest) return;
+      var matchedStep = steps.find(function(step) {
+        var section = document.getElementById(step.anchor);
+        return section && section.contains(target);
+      });
+      if (matchedStep) setActiveStepAnchor(matchedStep.anchor);
+    }
+    document.addEventListener('focusin', handleFocusIn);
+    return function() {
+      document.removeEventListener('focusin', handleFocusIn);
+    };
+  }, [steps]);
+
+  const title = initialContext.ticket
+    ? initialContext.ticket
+    : (mode === 'edit' || mode === 'review' ? 'New trade' : TRADE_TICKET);
+  const status = STATUS_LABELS[tradeStatus] || 'Draft';
+  const statusVariant = STATUS_VARIANTS[tradeStatus] || 'neutral-secondary';
+  const headerActions = null;
+
+  const editSections = (
+    <SecurityTradeForm flashKeys={flashKeys} form={form} updateField={updateField} INSTRUMENT_OPTIONS={selectableInstruments} COUNTERPARTY_OPTIONS={COUNTERPARTY_OPTIONS} PORTFOLIO_OPTIONS={portfolioOptions} CUSTODIAN_OPTIONS={CUSTODIAN_OPTIONS} EXECUTION_METHOD_OPTIONS={EXECUTION_METHOD_OPTIONS} TERM_OPTIONS={TERM_OPTIONS} hasAmountInputs={hasAmountInputs} formatMoney={formatMoney} STRATEGY_OPTIONS={STRATEGY_OPTIONS} availableQuantity={availableQuantity} />
+  );
+
+  const reviewSections = (
+    <SecurityTradeReview mainInfoRows={mainInfoRows} flashKeys={flashKeys} whenRows={whenRows} howMuchRows={howMuchRows} accountingRows={accountingRows} />
+  );
+
+  const previewSectionItems = React.useMemo(function() {
+    const items = [];
+    if (formError) items.push(<WorkflowNote key="form-error" text={formError} />);
+    if (workflowNote) {
+      items.push(<WorkflowNote key="workflow-note" text={workflowNote} />);
+    }
+    items.push(
+      <ViewSection key="preview-main-info" id="section-main-info" title="Main info" rows={mainInfoRows} flashKey={flashKeys['section-main-info']} />,
+      <ViewSection key="preview-when" id="section-when" title="When" rows={whenRows} flashKey={flashKeys['section-when']} />
+    );
+
+    const isPendingSettlementFlow =
+      mode === 'counterparty_form' ||
+      mode === 'counterparty_review' ||
+      tradeStatus === 'pending_settlement';
+    const isCounterpartyConfirmedFlow =
+      mode === 'settlement_form' ||
+      mode === 'settlement_review' ||
+      tradeStatus === 'counterparty_confirmed';
+    const isFinalSettlementFlow =
+      mode === 'bo_approval_detail' ||
+      mode === 'bo_approval_review' ||
+      mode === 'mo_settlement_confirmation_detail' ||
+      mode === 'settled_detail' ||
+      tradeStatus === 'settling' ||
+      tradeStatus === 'pending_mo_settlement_confirmation' ||
+      tradeStatus === 'returned_to_bo' ||
+      tradeStatus === 'settled';
+
+    items.push(
+        <ViewSection
+          key="preview-how-much"
+          id="section-how-much"
+          title="How much"
+          rows={howMuchRows}
+          flashKey={flashKeys['section-how-much']}
+        />
+      );
+    items.push(
+      <ViewSection
+        key="preview-accounting"
+        id="section-accounting"
+        title="Accounting"
+        rows={accountingRows}
+        flashKey={flashKeys['section-accounting']}
+      />
+    );
+
+    if (isCounterpartyConfirmedFlow || isFinalSettlementFlow) {
+      items.push(
+        <ViewSection
+          key="preview-counterparty"
+          id="section-counterparty"
+          title="Counterparty"
+          rows={[].concat(counterpartyRows, counterpartyCommentRows)}
+          flashKey={flashKeys['section-counterparty']}
+        />
+      );
+    }
+
+    if (isFinalSettlementFlow) {
+      items.push(
+        <ViewSection
+          key="preview-settlement"
+          id="section-settlement"
+          title="Settlement"
+          rows={[].concat(settlementRows, counterpartyCommentRows)}
+          flashKey={flashKeys['section-settlement']}
+        />
+      );
+    }
+
+    return items;
+  }, [
+    mode,
+    formError,
+    tradeStatus,
+    workflowNote,
+    mainInfoRows,
+    whenRows,
+    howMuchRows,
+    accountingRows,
+    flashKeys,
+    counterpartyRows,
+    counterpartyCommentRows,
+    settlementRows,
+  ]);
+
+  const middleSections = mode === 'edit'
+    ? <>{formError ? <WorkflowNote text={formError} /> : null}{workflowNote ? <WorkflowNote text={workflowNote} /> : null}{editSections}</>
+    : mode === 'review'
+      ? <>{formError ? <WorkflowNote text={formError} /> : null}{workflowNote ? <WorkflowNote text={workflowNote} /> : null}{reviewSections}</>
+      : previewSectionItems;
+
+  const middleFillMode =
+    mode === 'review'
+      ? 'stretch-last'
+      : 'filler-after-last';
+  const middleButtons = mode === 'edit'
+    ? <ButtonStack secondary={{ label: 'Save draft', variant: 'secondary', onClick: () => persistTradeAndReturn('draft', 'edit', false) }} primary={{ label: 'Continue', variant: 'primary', onClick: () => { if (validateTrade(true)) setMode('review'); } }} />
+    : mode === 'review'
+      ? <ButtonStack secondary={{ label: 'Back to edit', variant: 'secondary', onClick: () => setMode('edit', 'draft') }} primary={{ label: 'Submit for approval', variant: 'primary', onClick: () => persistTradeAndReturn('pending_approval', 'approval_detail', false) }} />
+      : null;
+
+  function rejectSettlement() {
+    returnToBo();
+  }
+
+  var rightColumn = null;
+  if (mode === 'approval_detail') {
+    rightColumn = (
+      <TradeApprovalPanel form={form} updateField={updateField} returnToFo={returnToFo} persistTradeAndReturn={persistTradeAndReturn} />
+    );
+  } else if (mode === 'mo_reconciliation_detail') {
+    rightColumn = (
+      <TradeReconciliationForm form={form} updateField={updateField} setMode={setMode} />
+    );
+  } else if (mode === 'mo_reconciliation_review') {
+    rightColumn = (
+      <TradeReconciliationReview moReconciliationRows={moReconciliationRows} moReconciliationCommentRows={moReconciliationCommentRows} form={form} setMode={setMode} persistTradeAndReturn={persistTradeAndReturn} returnToFo={returnToFo} />
+    );
+  } else if (mode === 'counterparty_form') {
+    rightColumn = (
+      <TradeCounterpartyForm form={form} updateField={updateField} setMode={setMode} />
+    );
+  } else if (mode === 'counterparty_review') {
+    rightColumn = (
+      <TradeCounterpartyReview counterpartyRows={counterpartyRows} counterpartyCommentRows={counterpartyCommentRows} form={form} setMode={setMode} persistTradeAndContinue={persistTradeAndContinue} returnToFo={returnToFo} />
+    );
+  } else if (mode === 'settlement_form') {
+    rightColumn = (
+      <TradeSettlementForm showReviewerCommentTile={showReviewerCommentTile} reviewerComment={reviewerComment} form={form} updateField={updateField} formatMoney={formatMoney} setMode={setMode} />
+    );
+  } else if (mode === 'settlement_review') {
+    rightColumn = (
+      <TradeSettlementReview settlementRows={settlementRows} counterpartyCommentRows={counterpartyCommentRows} setMode={setMode} persistTradeAndReturn={persistTradeAndReturn} />
+    );
+  } else if (mode === 'bo_approval_detail') {
+    rightColumn = (
+      <TradeBoCheckerForm form={form} updateField={updateField} setMode={setMode} />
+    );
+  } else if (mode === 'bo_approval_review') {
+    rightColumn = (
+      <TradeBoCheckerReview boApprovalRows={boApprovalRows} boApprovalCommentRows={boApprovalCommentRows} form={form} setMode={setMode} persistTradeAndReturn={persistTradeAndReturn} rejectSettlement={rejectSettlement} />
+    );
+  } else if (mode === 'mo_settlement_confirmation_detail') {
+    rightColumn = (
+      <TradeSettlementApprovalPanel form={form} updateField={updateField} returnToBo={returnToBo} persistTradeAndReturn={persistTradeAndReturn} />
+    );
+  } else if (showReviewerCommentTile) {
+    rightColumn = (
+      <TradeReviewerPanel reviewerComment={reviewerComment} form={form} />
+    );
+  }
+
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Security trades', href: 'Security Trades.html' }, { label: title }]} user="treasury.demo@plata.local">
+      <PageWorkspace padding={OUTER_PAD}>
+        <FlowStageLayout
+          navWidth={STEPPER_W}
+          mainWidth={CONTENT_W}
+          sideWidth={hasRightColumn ? CONTENT_W : undefined}
+          nav={
+            <AuraStepper
+              steps={stepperSteps}
+              activeAnchor={activeStepAnchor}
+              onStepClick={handleStepClick}
+              hideNumbers={true}
+              fillHeight={true}
+              disableAutoScroll={true}
+            />
+          }
+          main={
+            <IslandColumn
+              colRef={scrollRef}
+              scrollChildren={middleSections}
+              fillMode={middleFillMode}
+              buttons={middleButtons}
+            />
+          }
+          side={rightColumn}
+          header={(totalWidth) => (
+            <FormPageHeader
+              title={title}
+              status={status}
+              statusVariant={statusVariant}
+              onBack={onBack}
+              width={totalWidth}
+              actions={headerActions}
+            />
+          )}
+        />
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

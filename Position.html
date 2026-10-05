@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Position lots - Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="components/ResponsiveDetails.css?v=lots-1" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/TopBar.js?v=lots-1"></script>
+<script src="components/Badge.js"></script>
+<script src="components/AssetIcon.js"></script>
+<script src="components/Island.js"></script>
+<script src="components/UiPrimitives.js?v=lots-1"></script>
+<script src="components/FormPageHeader.js?v=lots-1"></script>
+<script src="components/TableCell.js?v=positions-1"></script>
+<script src="components/ColHeader.js?v=lots-1"></script>
+<script src="components/TablePagination.js?v=lots-1"></script>
+<script src="components/LotTable.js?v=lots-4"></script>
+<script src="PortfolioData.js?v=lots-1"></script>
+<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
+<script src="HoldingsLedger.js?v=lots-3"></script>
+<script src="TradeStore.js?v=lots-1"></script>
+<script src="PositionData.js?v=lots-2"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: thin; scrollbar-color: var(--aura-border-tertiary) transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function App() {
+  const params = new URLSearchParams(window.location.search);
+  const portfolioId = params.get('portfolioId') || '';
+  const instrument = params.get('instrument') || '';
+  const [rows, setRows] = React.useState([]);
+  const [portfolio, setPortfolio] = React.useState(null);
+  const [error, setError] = React.useState('');
+  React.useEffect(() => {
+    function refresh() {
+      try {
+        const current = PortfolioStore.find(portfolioId);
+        setPortfolio(current);
+        if (!current || !instrument) { setError('Position not found.'); return; }
+        setRows(PositionStore.lots(portfolioId, instrument));
+        const issues = PositionStore.issues();
+        setError(issues.length ? issues.map(issue => issue.ticket + ': ' + issue.message).join(' ') : '');
+      } catch (problem) { setError(problem.message); }
+    }
+    refresh();
+    window.addEventListener('storage', refresh);
+    window.addEventListener('pageshow', refresh);
+    return () => { window.removeEventListener('storage', refresh); window.removeEventListener('pageshow', refresh); };
+  }, [portfolioId, instrument]);
+  return <PageScreen responsiveTopBar={true} breadcrumbs={[{ label: 'Treasury' }, { label: 'Positions', href: 'Positions.html' }, { label: portfolio?.name || 'Position' }]} user="treasury.demo@plata.local">
+    <PageWorkspace justifyContent="center">
+      <StackColumn width="100%" maxWidth={1240} minWidth={0} minHeight={0} flexShrink={1}>
+        <FormPageHeader responsive={true} title={instrument || 'Position'} width="100%" height={92} backButtonSize={48} backButtonRadius={12}
+          backIcon={<AssetIcon src="assets/icons/lot-back.svg" size={20} naturalSize={24} />}
+          onBack={() => window.location.href = 'Positions.html'}
+          actions={portfolio && ['Active', 'Blocked'].includes(portfolio.status) ? <PrimaryActionButton label="New trade" iconSize={20}
+            icon={<AssetIcon src="assets/icons/lot-add.svg" size={20} naturalSize={20} />}
+            onClick={() => window.location.href = 'Trade.html?' + new URLSearchParams({ mode: 'edit', portfolioId, instrumentCode: instrument, type: portfolio.status === 'Blocked' ? 'sell' : 'buy' })} /> : null} />
+        {error ? <EmptyState label={error} /> : <LotTable rows={rows} />}
+      </StackColumn>
+    </PageWorkspace>
+  </PageScreen>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New portfolio - Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/Island.js"></script>
+<script src="components/UiPrimitives.js?v=portfolio-actions-2"></script>
+<script src="components/FormPageHeader.js?v=portfolio-actions-2"></script>
+<script src="components/AuraStepper.js?v=portfolio-actions-2"></script>
+<script src="components/ReviewRow.js"></script>
+<script src="components/FormSection.js?v=portfolio-actions-2"></script>
+<script src="components/ButtonStack.js?v=portfolio-active-1"></script>
+<script src="components/ConfirmationDialog.js?v=portfolio-active-1"></script>
+<script src="components/InputField.js"></script>
+<script src="components/SelectField.js"></script>
+<script src="components/TextareaField.js"></script>
+<script src="components/FieldWithAddon.js"></script>
+<script src="components/WorkflowFeedback.js?v=portfolio-actions-2"></script>
+<script src="components/PortfolioForms.js?v=portfolio-actions-2"></script>
+<script src="PortfolioData.js?v=lots-1"></script>
+<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
+<script src="HoldingsLedger.js?v=lots-3"></script>
+<script src="TradeStore.js?v=lots-1"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: thin; scrollbar-color: var(--aura-border-tertiary) transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const OWNERS = ['Alejandro Ruiz', 'Ana Cruz', 'Carlos Mendoza', 'Carmen Ortega', 'Elena Castillo', 'Fabiola Lopez', 'Fernando Vega', 'Hugo Morales', 'Isabel Torres', 'Javier Garcia', 'Lucia Mendez', 'Magali Ruiz', 'Miguel Torres', 'Sergio Chavez'];
+const MAIN_FIELDS = ['name', 'code', 'currency', 'owner'];
+const FORM_FIELDS = [...MAIN_FIELDS, 'book', 'classification', 'justification'];
+const RECORD_ID = new URLSearchParams(window.location.search).get('id');
+
+function App() {
+  const [initial, setInitial] = React.useState(() => {
+    if (!RECORD_ID) return { record: null };
+    try {
+      const record = PortfolioStore.find(RECORD_ID);
+      return record ? { record } : { error: 'Portfolio not found.' };
+    } catch (_) { return { error: 'Unable to load the portfolio. Please reload the page.' }; }
+  });
+  const record = initial.record;
+  const [form, setForm] = React.useState(() => Object.fromEntries(FORM_FIELDS.map(key => [key, record?.[key] || (key === 'classification' ? 'FVTPL' : '')])));
+  const [mode, setMode] = React.useState(record ? record.status === 'Pending approval' ? 'approval' : 'detail' : 'edit');
+  const [comment, setComment] = React.useState('');
+  const [activeAnchor, setActiveAnchor] = React.useState('portfolio-main');
+  const [error, setError] = React.useState('');
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState('');
+  const [deleting, setDeleting] = React.useState(false);
+  const [activeDialog, setActiveDialog] = React.useState(null);
+  const [activeError, setActiveError] = React.useState('');
+  const [changingStatus, setChangingStatus] = React.useState(false);
+  const scrollRef = React.useRef(null);
+  const submitted = React.useRef(false);
+  const filled = key => String(form[key] || '').trim().length > 0;
+  const needsJustification = form.book === 'Banking' && form.classification === 'FVTPL';
+  const mainComplete = MAIN_FIELDS.every(filled);
+  const classificationComplete = filled('book') && filled('classification') && (!needsJustification || filled('justification'));
+  const steps = [
+    { label: 'Main info', anchor: 'portfolio-main', completed: mainComplete },
+    { label: 'Classification', anchor: 'portfolio-classification', completed: classificationComplete },
+  ];
+
+  React.useEffect(() => {
+    function focusSection(event) {
+      const section = event.target.closest('#portfolio-main, #portfolio-classification');
+      if (section) setActiveAnchor(section.id);
+    }
+    document.addEventListener('focusin', focusSection);
+    return () => document.removeEventListener('focusin', focusSection);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    setActiveAnchor('portfolio-main');
+  }, [mode]);
+
+  function selectStep(anchor) {
+    setActiveAnchor(anchor);
+    const section = document.getElementById(anchor);
+    if (!section) return;
+    section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (mode !== 'edit') return;
+    const fields = Array.from(section.querySelectorAll('[data-stepper-field]'));
+    const field = fields.find(item => item.dataset.stepperEmpty === 'true') || fields[0];
+    const control = field && field.querySelector('input, textarea, [role="button"]');
+    if (control) control.focus({ preventScroll: true });
+  }
+
+  function continueToReview() {
+    if (!mainComplete || !classificationComplete) {
+      setError(!mainComplete ? 'Complete Name, Code, Currency and Owner to continue.' : !filled('book') ? 'Select a Book to continue.' : 'Justification is required for Banking book with FVTPL.');
+      selectStep(!mainComplete ? 'portfolio-main' : 'portfolio-classification');
+      return;
+    }
+    setError('');
+    setMode('review');
+  }
+
+  function persist(status, reviewComment) {
+    if (submitted.current) return;
+    submitted.current = true;
+    try {
+      const current = record ? PortfolioStore.find(record.id) : null;
+      if (record && (!current || current.status !== record.status)) {
+        submitted.current = false;
+        setError('This portfolio has changed. Reload the page before continuing.');
+        return;
+      }
+      const row = Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value.trim()]));
+      const updatedAt = new Date().toISOString();
+      const review = reviewComment === undefined ? {} : { reviewComment: reviewComment.trim(), reviewedBy: 'treasury.demo@plata.local', reviewedAt: updatedAt };
+      PortfolioStore.save({ ...current, ...row, ...review, id: record?.id || crypto.randomUUID(), status, updatedAt, updatedBy: 'treasury.demo@plata.local' });
+      window.location.href = 'Portfolios.html';
+    } catch (_) {
+      submitted.current = false;
+      setError('Unable to save the portfolio. Please try again.');
+    }
+  }
+
+  function returnToMaker() {
+    if (!comment.trim()) {
+      setError('Enter a comment before returning the portfolio to maker.');
+      document.querySelector('textarea')?.focus();
+      return;
+    }
+    persist('Returned to maker', comment);
+  }
+
+  function deletePortfolio() {
+    if (submitted.current || !record || record.status !== 'Returned to maker') return;
+    submitted.current = true;
+    setDeleting(true);
+    try {
+      PortfolioStore.remove(record.id, 'Returned to maker');
+      window.location.href = 'Portfolios.html';
+    } catch (_) {
+      submitted.current = false;
+      setDeleting(false);
+      setDeleteError('Unable to delete this portfolio. Reload the page and try again.');
+    }
+  }
+
+  const showComment = mode !== 'approval' && Boolean(record?.reviewComment);
+  const activeAction = PortfolioStore.activeAction(record);
+  const restoreAction = PortfolioStore.restoreAction(record);
+  const isReturned = record?.status === 'Returned to maker';
+  const reviewDate = record?.reviewedAt ? new Date(record.reviewedAt) : null;
+  const title = record?.name || 'New portfolio';
+  const subtitle = record?.updatedAt ? 'Last update ' + new Date(record.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' by ' + record.updatedBy : undefined;
+  const backToList = () => { window.location.href = 'Portfolios.html'; };
+
+  function restorePortfolio() {
+    if (submitted.current || !record || !restoreAction) return;
+    submitted.current = true;
+    setChangingStatus(true);
+    setError('');
+    try {
+      const updated = PortfolioStore.restore(record.id, restoreAction, 'treasury.demo@plata.local');
+      setInitial({ record: updated });
+    } catch (_) {
+      setError('Unable to update this portfolio. Reload the page and try again.');
+    } finally {
+      submitted.current = false;
+      setChangingStatus(false);
+    }
+  }
+
+  function confirmActiveAction() {
+    if (submitted.current || !record || !activeDialog) return;
+    submitted.current = true;
+    setChangingStatus(true);
+    try {
+      PortfolioStore.transitionActive(record.id, activeDialog, 'treasury.demo@plata.local');
+      backToList();
+    } catch (_) {
+      submitted.current = false;
+      setChangingStatus(false);
+      setActiveError('Unable to update this portfolio. Reload the page and try again.');
+    }
+  }
+
+  if (initial.error) return <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Portfolios' }]} user="treasury.demo@plata.local">
+    <PageWorkspace><FlowStageLayout mainWidth={492} header={<FormPageHeader title="Portfolio" width={492} onBack={backToList} />}
+      main={<IslandColumn scrollChildren={<WorkflowNote text={initial.error} />} buttons={<ButtonStack primary={{ label: 'Back to list', onClick: backToList }} />} />} />
+    </PageWorkspace></PageScreen>;
+
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Portfolios' }, { label: title }]} user="treasury.demo@plata.local">
+      <PageWorkspace>
+        <FlowStageLayout navWidth={240} mainWidth={492}
+          sideWidth={mode === 'approval' || showComment ? 492 : undefined}
+          header={width => <FormPageHeader title={title} subtitle={subtitle} status={record?.status} statusVariant={PortfolioStore.statusVariants[record?.status]} statusAtEnd={true} width={width} height={92} backButtonSize={48} onBack={() => mode === 'review' ? setMode('edit') : backToList()} />}
+          nav={<AuraStepper steps={steps} activeAnchor={activeAnchor} onStepClick={selectStep} disableAutoScroll={true} fillHeight={true}
+            footer={isReturned && mode === 'detail' ? <ButtonStack size="m" buttons={[
+              { label: 'Edit', variant: 'secondary', iconSrc: 'assets/icons/edit.svg', onClick: () => { setError(''); setMode('edit'); } },
+              { label: 'Delete', variant: 'secondary', iconSrc: 'assets/icons/trash.svg', iconOnly: true, onClick: () => { setDeleteError(''); setDeleteOpen(true); } },
+            ]} /> : restoreAction && mode === 'detail' ? <ButtonStack size="m" buttons={[
+              { label: restoreAction, variant: 'ghost', disabled: changingStatus, onClick: restorePortfolio },
+            ]} /> : activeAction && mode === 'detail' ? <ButtonStack size="m" buttons={[
+              { label: activeAction, variant: 'ghost', iconSrc: activeAction === 'Block' ? 'assets/icons/block.svg' : 'assets/icons/close-portfolio.svg',
+                onClick: () => { setActiveError(''); setActiveDialog(activeAction); } },
+            ]} /> : null} />}
+          main={<IslandColumn colRef={scrollRef}
+            scrollChildren={<>
+              {error && mode !== 'approval' ? <WorkflowNote key="feedback" text={error} /> : null}
+              {mode === 'edit'
+                ? <PortfolioForm key="form" form={form} updateField={(key, value) => { setForm(previous => ({ ...previous, [key]: value })); setError(''); }} owners={OWNERS} currencies={['MXN', 'USD']} books={['Trading', 'Banking']} classifications={['FVTPL']} />
+                : <PortfolioReview key="review" form={form} />}
+            </>}
+            buttons={mode === 'edit' || mode === 'review' ? <ButtonStack buttons={mode === 'edit'
+              ? [{ label: 'Continue', onClick: continueToReview }]
+              : [{ label: 'Back to edit', variant: 'secondary', onClick: () => { setError(''); setMode('edit'); } }, { label: 'Submit for approval', onClick: () => persist('Pending approval') }]} /> : null}
+          />}
+          side={mode === 'approval'
+            ? <ApprovalPanel comment={comment} onCommentChange={value => { setComment(value); setError(''); }} error={error} onReturn={returnToMaker} onApprove={() => persist('Active', comment)} />
+            : showComment ? <IslandColumn fitContent={isReturned} scrollChildren={isReturned
+              ? <ReviewEventTile status="Returned to maker" iconSrc="assets/icons/review-returned.svg" comment={record.reviewComment} reviewedBy={record.reviewedBy}
+                  date={reviewDate ? reviewDate.toLocaleDateString('en-CA') : ''} time={reviewDate ? reviewDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''} />
+              : <ReviewCommentTile comment={record.reviewComment} reviewedBy={record.reviewedBy} reviewedAt={record.reviewedAt ? new Date(record.reviewedAt).toLocaleString('en-GB') : ''} />} /> : null}
+        />
+      </PageWorkspace>
+      <ConfirmationDialog open={deleteOpen} title="Are you sure you want to delete the portfolio?" description="This action can't be undone"
+        busy={deleting} error={deleteError} onCancel={() => { if (!deleting) setDeleteOpen(false); }} onConfirm={deletePortfolio} />
+      <ConfirmationDialog open={Boolean(activeDialog)} title={'Are you sure you want to ' + (activeDialog || '').toLowerCase() + ' this portfolio?'}
+        description={activeDialog === 'Block' ? 'New instruments cannot be purchased in a blocked portfolio.\n\nThe portfolio will close automatically once all instruments in it have been sold' : undefined}
+        confirmLabel={activeDialog} closeLabel="Dismiss dialog" busy={changingStatus} error={activeError}
+        onCancel={() => { if (!changingStatus) setActiveDialog(null); }} onConfirm={confirmActiveAction} />
+    </PageScreen>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

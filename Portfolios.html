@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolios - Treasury Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="components/AuraTokens.js"></script>
+<script src="components/Badge.js"></script>
+<script src="components/ColHeader.js"></script>
+<script src="components/TableCell.js"></script>
+<script src="components/Chip.js"></script>
+<script src="components/CheckboxControl.js"></script>
+<script src="components/TopBar.js"></script>
+<script src="components/FilterDropdown.js"></script>
+<script src="components/SideMenu.js?v=positions-1"></script>
+<script src="components/Island.js"></script>
+<script src="components/UiPrimitives.js"></script>
+<script src="components/ToolbarIcons.js"></script>
+<script src="components/TableLayout.js"></script>
+<script src="components/FilterChip.js"></script>
+<script src="components/PortfolioTable.js"></script>
+<script src="PortfolioData.js?v=lots-1"></script>
+<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
+<script src="HoldingsLedger.js?v=lots-3"></script>
+<script src="TradeStore.js?v=lots-1"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { font-family: var(--aura-font-family, 'Inter', sans-serif); background: var(--aura-bg-neutral-base); overflow: hidden; }
+.scrollable { scrollbar-width: thin; scrollbar-color: var(--aura-border-tertiary) transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const T = AuraTokens;
+const STATUS_OPTIONS = [
+  { key: 'Pending approval', label: 'Pending approval', color: T.colors.tigWarningPrimary, outlined: true },
+  { key: 'Active', label: 'Active', color: T.colors.tigSuccessPrimary },
+  { key: 'Returned to maker', label: 'Returned to maker', color: T.colors.tigErrorPrimary, outlined: true },
+  { key: 'Blocked', label: 'Blocked', color: T.colors.tigNeutralSecondary },
+  { key: 'Closed', label: 'Closed', color: T.colors.tigNeutralSecondary, outlined: true },
+  { key: 'Cancelled', label: 'Cancelled', color: T.colors.tigErrorPrimary },
+];
+const STATUS_VARIANTS = PortfolioStore.statusVariants;
+const FILTERS = [
+  { key: 'status', label: 'Status', options: STATUS_OPTIONS },
+  { key: 'book', label: 'Book', options: ['Trading', 'Banking'].map(value => ({ key: value, label: value })) },
+  { key: 'currency', label: 'Currency', options: ['MXN', 'USD'].map(value => ({ key: value, label: value })) },
+];
+function App() {
+  const [loadError, setLoadError] = React.useState('');
+  const [portfolios, setPortfolios] = React.useState([]);
+  React.useEffect(() => {
+    function refresh() {
+      try { setPortfolios(PortfolioStore.list()); setLoadError(''); }
+      catch (_) { setLoadError('Unable to load portfolios. Please reload the page.'); }
+    }
+    refresh();
+    window.addEventListener('pageshow', refresh);
+    window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('pageshow', refresh); window.removeEventListener('storage', refresh); };
+  }, []);
+  const [activeFilters, setActiveFilters] = React.useState({});
+  const [openFilter, setOpenFilter] = React.useState(null);
+  const rows = portfolios.filter(row => FILTERS.every(filter => {
+    const selected = activeFilters[filter.key] || [];
+    return selected.length === 0 || selected.includes(row[filter.key]);
+  }));
+  const hasFilters = Object.values(activeFilters).some(values => values.length > 0);
+  return (
+    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Portfolios' }]} user="treasury.demo@plata.local">
+      <PageWorkspace>
+        <SideMenu activeSectionKey="portfolios" activeItemKey="portfolio-list" />
+        <StackColumn flex={1} minWidth={0} minHeight={0} gap={T.layout.islandGap} flexShrink={1}>
+          <Island gap={T.layout.tileGap} background={T.colors.bgNeutralBase}>
+            <ToolbarTile minHeight={80}>
+              <PageTitle label="Portfolios" /><FlexSpacer />
+              <PrimaryActionButton label="New portfolio" icon={<PlusIcon16 />} onClick={() => window.location.href = 'Portfolio.html'} />
+            </ToolbarTile>
+            <ToolbarTile minHeight={80} scrollable={true}>
+              {FILTERS.map(filter => (
+                <FilterChip key={filter.key} label={filter.label} options={filter.options}
+                  selectedKeys={activeFilters[filter.key] || []} open={openFilter === filter.key}
+                  onOpenChange={open => setOpenFilter(open ? filter.key : null)}
+                  onChange={values => setActiveFilters(previous => ({ ...previous, [filter.key]: values }))} />
+              ))}
+              {hasFilters ? <TextActionButton label="Clear all" icon={<CloseIcon16 />} onClick={() => setActiveFilters({})} /> : null}
+            </ToolbarTile>
+          </Island>
+          {loadError ? <EmptyState label={loadError} /> : <PortfolioTable rows={rows} statusVariants={STATUS_VARIANTS} onOpen={row => window.location.href = 'Portfolio.html?id=' + encodeURIComponent(row.id)} />}
+        </StackColumn>
+      </PageWorkspace>
+    </PageScreen>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Positions - Treasury Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="components/ResponsiveDetails.css?v=lots-1" rel="stylesheet">
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
@@ -12,7 +13,7 @@
 <script src="components/Badge.js?v=positions-1"></script>
 <script src="components/AssetIcon.js"></script>
 <script src="components/ColHeader.js?v=positions-1"></script>
-<script src="components/TableCell.js?v=positions-1"></script>
+<script src="components/TableCell.js?v=positions-2"></script>
 <script src="components/Chip.js?v=positions-1"></script>
 <script src="components/CheckboxControl.js"></script>
 <script src="components/TopBar.js"></script>
@@ -25,12 +26,12 @@
 <script src="components/TableLayout.js"></script>
 <script src="components/FilterChip.js?v=positions-1"></script>
 <script src="components/ChoiceChip.js"></script>
-<script src="components/PositionTable.js?v=lots-1"></script>
-<script src="PortfolioData.js?v=lots-1"></script>
-<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
-<script src="HoldingsLedger.js?v=lots-3"></script>
-<script src="TradeStore.js?v=lots-1"></script>
-<script src="PositionData.js?v=lots-2"></script>
+<script src="components/PositionTable.js?v=positions-2"></script>
+<script src="PortfolioData.js?v=liquidity-2"></script>
+<script src="SecurityTradeData.js?v=tbills-1"></script>
+<script src="HoldingsLedger.js?v=tbills-1"></script>
+<script src="TradeStore.js?v=liquidity-2"></script>
+<script src="PositionData.js?v=tbills-3"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -70,7 +71,7 @@ function App() {
     setSort(previous => previous?.key !== key ? { key, dir: 'asc' } : previous.dir === 'asc' ? { key, dir: 'desc' } : null);
   }
   return (
-    <PageScreen breadcrumbs={[{ label: 'Treasury' }, { label: 'Portfolios' }, { label: 'Positions' }]} user="treasury.demo@plata.local">
+    <PageScreen responsiveTopBar={true} breadcrumbs={[{ label: 'Treasury' }, { label: 'Portfolios' }, { label: 'Positions' }]} user="treasury.demo@plata.local">
       <PageWorkspace>
         <SideMenu activeSectionKey="portfolios" activeItemKey="positions" />
         <StackColumn flex={1} minWidth={0} minHeight={0} flexShrink={1}>
@@ -78,6 +79,8 @@ function App() {
             <ToolbarTile minHeight={80} scrollable={true}>
               <PageTitle label="Positions" /><FlexSpacer />
               <SearchBar label="Search positions" value={query} onChange={setQuery} icon={<AssetIcon src="assets/icons/position-search.svg" size={16} />} />
+              <PrimaryActionButton label="New trade" iconSize={20} icon={<AssetIcon src="assets/icons/lot-add.svg" size={20} naturalSize={20} />}
+                onClick={() => window.location.href = 'Trade.html?mode=edit'} />
             </ToolbarTile>
             <ToolbarTile minHeight={80} scrollable={true}>
               <ChoiceChip label={'Group by ' + groupBy} options={GROUP_OPTIONS} value={groupBy}
@@ -90,8 +93,7 @@ function App() {
               {maturityDates.length || query ? <TextActionButton label="Clear all" icon={<CloseIcon16 />} onClick={() => { setMaturityDates([]); setQuery(''); }} /> : null}
             </ToolbarTile>
           </Island>
-          {loadError ? <EmptyState label={loadError} /> : <PositionTable key={groupBy} groupBy={groupBy} groups={groups} sort={sort} onSort={sortBy}
-            onOpen={row => window.location.href = 'Position.html?' + new URLSearchParams({ portfolioId: row.portfolioId, instrument: row.instrument })} />}
+          {loadError ? <EmptyState label={loadError} /> : <PositionTable key={groupBy} groupBy={groupBy} groups={groups} sort={sort} onSort={sortBy} />}
         </StackColumn>
       </PageWorkspace>
     </PageScreen>

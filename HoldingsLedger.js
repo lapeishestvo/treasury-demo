@@ -68,7 +68,7 @@
         var received = settled(row);
         lots.push({
           id: 'lot-' + row.ticket, tradeTicket: row.ticket, positionId: positionKey(row),
-          portfolioId: row.portfolioId, instrument: instrument(row), currency: 'MXN',
+          portfolioId: row.portfolioId, instrument: instrument(row), currency: row.instrumentCurrency || (/^US_TBILL_/.test(instrument(row)) ? 'USD' : 'MXN'),
           maturityDate: row.maturityDate || '', acquiredAt: timestamp(row, true),
           settlement: (row.details?.settlementDateFinal || row.settlementDate || '') + (row.details?.tradeTime ? ', ' + row.details.tradeTime.slice(0, 5) : ''),
           originalQuantity: qty, pending: received ? 0 : qty, open: received ? qty : 0,

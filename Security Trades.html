@@ -21,10 +21,10 @@
 <script src="components/Island.js"></script>
 <script src="components/UiPrimitives.js"></script>
 <script src="components/SecurityTradeTableCell.js?v=trade-portfolio-1"></script>
-<script src="PortfolioData.js?v=lots-1"></script>
-<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
-<script src="HoldingsLedger.js?v=lots-3"></script>
-<script src="TradeStore.js?v=lots-1"></script>
+<script src="PortfolioData.js?v=liquidity-2"></script>
+<script src="SecurityTradeData.js?v=tbills-1"></script>
+<script src="HoldingsLedger.js?v=tbills-1"></script>
+<script src="TradeStore.js?v=liquidity-2"></script>
 <script src="components/TableLayout.js"></script>
 <script src="components/ToolbarIcons.js"></script>
 <script src="components/SearchBar.js"></script>
@@ -198,7 +198,7 @@ function App() {
   const [activeFilter, setActiveFilter] = React.useState(null);
   const [statusesOpen, setStatusesOpen] = React.useState(false);
   const [authorOpen, setAuthorOpen] = React.useState(false);
-  const [sortState, setSortState] = React.useState({ key: 'ticket', dir: 'desc' });
+  const [sortState, setSortState] = React.useState({ key: 'default', dir: 'desc' });
   const [searchValue, setSearchValue] = React.useState('');
   const [columnsOpen, setColumnsOpen] = React.useState(false);
   const [selectedStatuses, setSelectedStatuses] = React.useState([]);
@@ -315,6 +315,9 @@ function App() {
 
   const sorted = [...filteredRows].sort((a, b) => {
     const key = sortState.key;
+    if (key === 'default') {
+      return Number(Boolean(b.demoTbillKey)) - Number(Boolean(a.demoTbillKey)) || Number(b.ticket) - Number(a.ticket);
+    }
 
     function parseNumber(value) {
       return Number(String(value || '0').replace(/,/g, ''));

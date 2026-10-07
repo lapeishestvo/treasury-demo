@@ -1,13 +1,17 @@
-// Figma 7172:111112, with Portfolio / Instrument / Book component variants.
+// Figma 7762:95477, with Portfolio / Instrument / Book grouping.
 (function() {
   var commonColumns = [
     { key: 'currency', label: 'Currency', width: 104 },
     { key: 'maturityDate', label: 'Maturity date', width: 152, sortable: true },
-    { key: 'pending', label: 'Pending', width: 144, numeric: true, sortable: true },
-    { key: 'open', label: 'Open', width: 144, numeric: true, sortable: true },
-    { key: 'committed', label: 'Committed', width: 144, numeric: true, sortable: true },
-    { key: 'quantity', label: 'Position quantity', width: 176, numeric: true, sortable: true },
-    { key: 'acquisitionCost', label: 'Acquisition cost', width: 168, numeric: true, sortable: true },
+    { key: 'quantity', label: 'Position quantity', width: 184, numeric: true, sortable: true },
+    { key: 'acquisitionValue', label: 'Acquisition cost', width: 224, numeric: true, sortable: true, money: true },
+    { key: 'accrued', label: 'Accrued', width: 164, numeric: true, sortable: true, money: true },
+    { key: 'accruedMxn', label: 'Accrued, MXN', width: 164, numeric: true, sortable: true, money: true, currency: 'MXN' },
+    { key: 'marketValue', label: 'Market value', width: 204, numeric: true, sortable: true, money: true },
+    { key: 'marketValueMxn', label: 'Market value, MXN', width: 204, numeric: true, sortable: true, money: true, currency: 'MXN' },
+    { key: 'unrealisedPnl', label: 'Unrealised P&L', width: 204, numeric: true, sortable: true, money: true },
+    { key: 'unrealisedPnlMxn', label: 'Unrealised P&L, MXN', width: 204, numeric: true, sortable: true, money: true, currency: 'MXN' },
+    { key: 'ytm', label: 'YTM', width: 92, numeric: true, sortable: true },
   ];
   function positionColumns(groupBy) {
     var columns = [];
@@ -15,33 +19,23 @@
     if (groupBy !== 'portfolio') columns.push({ key: 'portfolio', label: 'Portfolio', width: groupBy === 'book' ? 144 : 152 });
     return columns.concat(commonColumns);
   }
-  function formatPositionValue(value, cost) {
-    if (value == null) return '';
+  function formatPositionValue(value, percent) {
+    if (value == null) return '\u2014';
     if (typeof value !== 'number') return value;
-    if (value === 0 && !cost) return '\u2014';
-    return value.toLocaleString('en-US', cost ? { minimumFractionDigits: 8, maximumFractionDigits: 8 } : { maximumFractionDigits: 0 });
+    return value.toLocaleString('en-US', percent ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 }) + (percent ? ' %' : '');
   }
   function PositionTableRow(props) {
     var T = AuraTokens;
     return React.createElement('div', {
-      role: 'row', 'data-position-id': props.total ? undefined : props.row.id,
-      'data-position-total': props.total ? true : undefined,
-      tabIndex: !props.total && props.onOpen ? 0 : undefined,
-      'aria-label': !props.total ? 'Open lots for ' + props.row.instrument + ' in ' + props.row.portfolio : undefined,
-      onClick: !props.total && props.onOpen ? function() { props.onOpen(props.row); } : undefined,
-      onKeyDown: !props.total && props.onOpen ? function(event) {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); props.onOpen(props.row); }
-      } : undefined,
-      onMouseEnter: !props.total ? function(event) { event.currentTarget.style.background = T.colors.bgNeutralSecondary; } : undefined,
-      onMouseLeave: !props.total ? function(event) { event.currentTarget.style.background = ''; } : undefined,
-      style: { display: 'flex', height: 52, cursor: !props.total && props.onOpen ? 'pointer' : undefined, boxShadow: 'inset 0 1px ' + T.colors.borderNeutralLighter },
+      role: 'row', 'data-position-id': props.row.id,
+      style: { display: 'flex', height: 52, boxShadow: 'inset 0 1px ' + T.colors.borderNeutralLighter },
     }, props.columns.map(function(column, index) {
-      var value = props.total && index === 0 ? 'Total' : props.row[column.key];
+      var value = props.row[column.key];
       return React.createElement(Td, { key: column.key, role: 'cell', width: column.width, first: index === 0 },
-        React.createElement(TextCell, { value: formatPositionValue(value, column.key === 'acquisitionCost'), numeric: column.numeric,
+        column.money ? React.createElement(MoneyCell, { value: value, currency: column.currency || props.row.currency }) :
+        React.createElement(TextCell, { value: formatPositionValue(value, column.key === 'ytm'), numeric: column.numeric,
           style: { display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-            color: value === 0 ? T.colors.tigNeutralTertiary : props.total && index === 0 ? T.colors.tigNeutralSecondary : T.colors.tigNeutralPrimary,
-            fontWeight: props.total ? T.font.weightSemiBold : T.font.weightBody },
+            color: value == null ? T.colors.tigNeutralTertiary : T.colors.tigNeutralPrimary },
         })
       );
     }));
@@ -81,11 +75,10 @@
                 first: index === 0, align: column.numeric ? 'right' : 'left', compact: true,
                 sortable: column.sortable, sortKey: column.key, sortState: props.sort, onSort: props.onSort,
                 sortIcon: 'assets/icons/position-sort.svg' });
-            })),
-            React.createElement(PositionTableRow, { row: group.total, columns: props.columns, total: true })
+            }))
           ),
           React.createElement('div', { role: 'rowgroup' }, visible.map(function(row) {
-            return React.createElement(PositionTableRow, { key: row.id, row: row, columns: props.columns, onOpen: props.onOpen });
+            return React.createElement(PositionTableRow, { key: row.id, row: row, columns: props.columns });
           }))
         ) : null,
         expanded && group.rows.length > 4 ? React.createElement('button', {
@@ -108,7 +101,7 @@
     },
       props.groups.length ? React.createElement('div', { style: { minWidth: width, display: 'flex', flexDirection: 'column', gap: AuraTokens.layout.islandGap } },
         props.groups.map(function(group) { return React.createElement(PositionGroup, {
-          key: group.id, group: group, columns: columns, sort: props.sort, onSort: props.onSort, onOpen: props.onOpen,
+          key: group.id, group: group, columns: columns, sort: props.sort, onSort: props.onSort,
         }); })
       ) : React.createElement(Island, null, React.createElement(EmptyState, { label: 'No positions found' }))
     );

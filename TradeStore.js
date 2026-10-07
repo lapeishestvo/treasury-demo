@@ -173,8 +173,8 @@ function normalizeInstrumentCode(next, details) {
   var rowInstrumentCode = String(next.instrumentCode || '').trim();
 
   var code = rowInstrumentCode || detailInstrumentCode;
-  if (!code && /^BI_/.test(rowInstrument)) code = rowInstrument;
-  if (!code && /^BI_/.test(detailInstrument)) code = detailInstrument;
+  if (!code && /^(BI_|US_TBILL_)/.test(rowInstrument)) code = rowInstrument;
+  if (!code && /^(BI_|US_TBILL_)/.test(detailInstrument)) code = detailInstrument;
   if (!code) code = 'BI_CETES_260205';
 
   next.instrumentCode = code;
@@ -301,6 +301,62 @@ function addDemoOpeningTrades(rows) {
   });
   return result;
 }
+function addDemoTbillTrades(rows) {
+  // Augment only the bundled demo dataset, not empty/custom user datasets.
+  if (!rows.some(function(row) { return row.demoOpeningKey; })) return rows;
+  var portfolio = PortfolioStore.find('LQ-USD');
+  if (!portfolio) return rows;
+  var result = rows.slice();
+  SecurityTradeData.tbills.forEach(function(code, index) {
+    if (result.some(function(row) { return row.demoTbillKey === code; })) return;
+    var ticket = 91000 + index;
+    while (result.some(function(row) { return row.ticket === String(ticket); })) ticket += 1;
+    var date = '2026-10-0' + (index + 1);
+    var qty = [3100, 4850, 7200, 3800][index];
+    var price = ['99.70975806', '99.49249278', '98.62440000', '98.06463158'][index];
+    var maturity = code.slice(-6);
+    result.push(normalizeTradeRow({
+      ticket: String(ticket), demoTbillKey: code, type: 'buy', status: 'settled', mode: 'settled_detail', readonly: true,
+      portfolioId: portfolio.id, instrument: code, instrumentCode: code, instrumentCurrency: 'USD',
+      qty: String(qty), price: price, total: formatSeedTotal(qty, price), rate: String(4.15 + index * 0.03),
+      counterparty: 'Santander', custodian: 'INDEVAL', term: 'T+0', strategy: 'Hold to Maturity (HTM)',
+      created: date, tradeDate: date, settlementDate: date, settledAt: date + 'T09:00:00Z',
+      maturityDate: '20' + maturity.slice(0, 2) + '-' + maturity.slice(2, 4) + '-' + maturity.slice(4, 6),
+      details: { instrument: code, tradeTime: '09:00', executionMethod: 'SWIFT', currency: 'USD',
+        settlementDateFinal: date, amount: formatSeedTotal(qty, price), fee: '0', netAmount: formatSeedTotal(qty, price) },
+    }));
+  });
+  return result;
+}
+function addDemoLiquidityTrades(rows) {
+  // Older demo bindings skipped this portfolio when it was already blocked.
+  if (!rows.some(function(row) { return row.demoOpeningKey; })) return rows;
+  var portfolio = PortfolioStore.find('LQ-MXN');
+  if (!portfolio || ['Active', 'Blocked'].indexOf(portfolio.status) < 0) return rows;
+  if (rows.some(function(row) { return row.portfolioId === portfolio.id && row.type === 'buy'; })) return rows;
+  var result = rows.slice();
+  ['BI_CETES_261015', 'BI_CETES_261029', 'BI_CETES_261126', 'BI_CETES_270107'].forEach(function(code, index) {
+    var ticket = 92000 + index;
+    while (result.some(function(row) { return row.ticket === String(ticket); })) ticket += 1;
+    var date = '2026-10-01';
+    var qty = [350000, 625000, 180000, 845000][index];
+    var rate = String(7.1 + index * 0.05);
+    var price = SecurityTradeData.calculatePrice({ instrument: code, settlementDate: date, rate: rate });
+    var total = formatSeedTotal(qty, price);
+    var maturity = code.slice(-6);
+    result.push(normalizeTradeRow({
+      ticket: String(ticket), demoLiquidityKey: code, type: 'buy', status: 'settled', mode: 'settled_detail', readonly: true,
+      portfolioId: portfolio.id, instrument: code, instrumentCode: code, instrumentCurrency: 'MXN',
+      qty: String(qty), price: price, total: total, rate: rate,
+      counterparty: 'Santander', custodian: 'INDEVAL', term: 'T+0', strategy: 'Hold to Maturity (HTM)',
+      created: date, tradeDate: date, settlementDate: date, settledAt: date + 'T09:00:00Z',
+      maturityDate: '20' + maturity.slice(0, 2) + '-' + maturity.slice(2, 4) + '-' + maturity.slice(4, 6),
+      details: { instrument: code, tradeTime: '09:00', executionMethod: 'Phone', currency: 'MXN',
+        settlementDateFinal: date, amount: total, fee: '0', netAmount: total },
+    }));
+  });
+  return result;
+}
 var transactionRows = null;
 var databasePromise = null;
 function list() {
@@ -313,6 +369,7 @@ function list() {
   var normalized = rows.map(normalizeTradeRow);
   var migration = localStorage.getItem('aura_lots_version') !== '1';
   if (migration) normalized = addDemoOpeningTrades(normalized);
+  normalized = addDemoLiquidityTrades(addDemoTbillTrades(normalized));
   var state = HoldingsLedger.project(normalized);
   normalized = normalized.map(function(row) {
     return !row.lotAllocations && state.allocations[row.ticket]
@@ -348,7 +405,7 @@ function transact(buildRow) {
       var nextRows, next, failure;
       request.onsuccess = function() {
         try {
-          var rows = request.result ? request.result.map(normalizeTradeRow) : list();
+          var rows = request.result ? addDemoLiquidityTrades(addDemoTbillTrades(request.result.map(normalizeTradeRow))) : list();
           transactionRows = rows;
           next = HoldingsLedger.prepare(normalizeTradeRow(buildRow()), rows);
           nextRows = [next].concat(rows.filter(function(row) { return row.ticket !== next.ticket; }));

@@ -16,7 +16,7 @@
   }
   var seeds = [
     { name: 'Liquidity MXN', code: 'LQ-MXN', book: 'Banking', classification: 'FVTPL', currency: 'MXN', status: 'Active', owner: 'Sergio Chavez' },
-    { name: 'Liquidity USD', code: 'LQ-USD', book: 'Banking', classification: 'FVTPL', currency: 'USD', status: 'Active', owner: 'Magali Ruiz' },
+    { name: 'Multi-currency Liquidity', code: 'LQ-USD', book: 'Banking', classification: 'FVTPL', currency: 'USD', status: 'Active', owner: 'Magali Ruiz' },
     { name: 'CETES Trading', code: 'CET-TRD', book: 'Trading', classification: 'FVTPL', currency: 'MXN', status: 'Active', owner: 'Fabiola Lopez' },
     { name: 'Government Bonds', code: 'GOV-MXN', book: 'Trading', classification: 'FVTPL', currency: 'MXN', status: 'Pending approval', owner: 'Miguel Torres' },
     { name: 'Treasury Reserve', code: 'TR-RES', book: 'Banking', classification: 'FVTPL', currency: 'MXN', status: 'Active', owner: 'Ana Cruz' },
@@ -33,7 +33,11 @@
   }
 
   function list() {
-    var saved = readSaved().map(function(row) { return Object.assign({ id: row.code }, row); });
+    var saved = readSaved().map(function(row) {
+      var next = Object.assign({ id: row.code }, row);
+      if (next.id === 'LQ-USD' && next.name === 'Liquidity USD') next.name = 'Multi-currency Liquidity';
+      return next;
+    });
     var overrides = new Map(saved.map(function(row) { return [row.id, row]; }));
     var seedIds = new Set(seeds.map(function(row) { return row.id; }));
     return saved.filter(function(row) { return !seedIds.has(row.id); }).concat(seeds.map(function(row) {

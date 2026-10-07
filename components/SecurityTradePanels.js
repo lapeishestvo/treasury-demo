@@ -290,22 +290,22 @@
         onChange: value => updateField('settlementDateFinal', value)
       })), React.createElement(InlineFields, null, React.createElement(InputField, {
         label: "Actual settlement amount",
-        prefix: "MXN",
+        prefix: form.currency || props.instrumentCurrency,
         value: form.amount,
         onChange: value => updateField('amount', value)
       }), React.createElement(SelectField, {
         label: "Settlement currency",
         value: form.currency,
         onChange: value => updateField('currency', value),
-        options: ['MXN']
+        options: [props.instrumentCurrency || 'MXN']
       })), React.createElement(InlineFields, null, React.createElement(InputField, {
         label: "Fee / commission",
-        prefix: "MXN",
+        prefix: form.currency || props.instrumentCurrency,
         value: form.fee,
         onChange: value => updateField('fee', value)
       }), React.createElement(InputField, {
         label: "Net amount",
-        prefix: "MXN",
+        prefix: form.currency || props.instrumentCurrency,
         value: form.netAmount || (form.amount && form.fee ? formatMoney(Number(String(form.amount).replace(/[^0-9.-]/g, '')) - Number(String(form.fee).replace(/[^0-9.-]/g, ''))) : form.netAmount),
         onChange: value => updateField('netAmount', value)
       })), React.createElement(InputField, {

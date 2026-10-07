@@ -1,5 +1,10 @@
-// Shared portfolio binding and illustrative CETES pricing for the security demo.
+// Shared portfolio binding and illustrative discount-security pricing for the demo.
 (function () {
+  var tbills = ['US_TBILL_261022', 'US_TBILL_261119', 'US_TBILL_270107', 'US_TBILL_270408'];
+  function instrumentInfo(code) {
+    var isTbill = /^US_TBILL_/.test(String(code || ''));
+    return { type: isTbill ? 'T-Bills' : 'CETES', currency: isTbill ? 'USD' : 'MXN', nominal: isTbill ? 100 : 10 };
+  }
   function eligible(portfolio, type) {
     return portfolio.status === 'Active' || (type === 'sell' && portfolio.status === 'Blocked');
   }
@@ -7,6 +12,7 @@
   function bind(row, portfolios) {
     var next = Object.assign({}, row);
     var details = Object.assign({}, row.details);
+    next.instrumentCurrency = instrumentInfo(details.instrument || row.instrumentCode || row.instrument).currency;
     var id = row.portfolioId || details.portfolioId;
     var portfolio = portfolios.find(function(item) { return item.id === id; });
     // Migrate only unbound legacy records; never silently replace a deleted portfolio.
@@ -48,8 +54,8 @@
     var rate = Number(rateText.replace(/,/g, ''));
     var days = (maturityTime - settlement) / 86400000;
     if (!rateText || !Number.isFinite(rate) || rate < 0 || !Number.isFinite(days) || days < 0) return '';
-    return (10 / (1 + rate / 100 * days / 360)).toFixed(8);
+    return (instrumentInfo(form.instrument).nominal / (1 + rate / 100 * days / 360)).toFixed(8);
   }
 
-  window.SecurityTradeData = { bind: bind, eligible: eligible, calculatePrice: calculatePrice };
+  window.SecurityTradeData = { bind: bind, eligible: eligible, calculatePrice: calculatePrice, instrumentInfo: instrumentInfo, tbills: tbills };
 })();

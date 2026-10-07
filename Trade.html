@@ -30,12 +30,12 @@
 <script src="components/UiPrimitives.js?v=trade-portfolio-1"></script>
 <script src="components/AttachmentsField.js"></script>
 <script src="components/WorkflowFeedback.js"></script>
-<script src="PortfolioData.js?v=lots-1"></script>
-<script src="SecurityTradeData.js?v=trade-portfolio-1"></script>
-<script src="HoldingsLedger.js?v=lots-3"></script>
-<script src="TradeStore.js?v=lots-1"></script>
-<script src="components/SecurityTradeForms.js?v=lots-1"></script>
-<script src="components/SecurityTradePanels.js"></script>
+<script src="PortfolioData.js?v=liquidity-2"></script>
+<script src="SecurityTradeData.js?v=tbills-1"></script>
+<script src="HoldingsLedger.js?v=tbills-1"></script>
+<script src="TradeStore.js?v=liquidity-2"></script>
+<script src="components/SecurityTradeForms.js?v=tbills-1"></script>
+<script src="components/SecurityTradePanels.js?v=tbills-1"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -234,6 +234,7 @@ function getDefaultModeForStatus(status) {
 
 function inferInstrumentType(label) {
   const value = String(label || '').toUpperCase();
+  if (value.includes('TBILL')) return 'T-Bills';
   if (value.includes('UDIBONO')) return 'UDIBONO';
   if (value.includes('BONO')) return 'BONOS';
   return 'CETES';
@@ -358,7 +359,8 @@ function formatTicketDate() {
 function buildInitialForm(context) {
   const isNewTrade = !context.ticket && context.mode === 'edit';
   const details = context.details || {};
-  const totalWithCurrency = isNewTrade ? '' : 'MXN ' + context.total;
+  const instrumentCurrency = SecurityTradeData.instrumentInfo(context.instrumentCode || context.instrumentLabel).currency;
+  const totalWithCurrency = isNewTrade ? '' : instrumentCurrency + ' ' + context.total;
   const legacyTradeTime = String(details.tradeTime || '').trim();
   const seedCounterpartyDetails =
     context.mode === 'settlement_form' ||
@@ -445,7 +447,7 @@ function buildInitialForm(context) {
     settlementAccount: hydrateSettlementDetails ? (details.settlementAccount || (isNewTrade ? '' : '')) : '',
     settlementDateFinal: hydrateSettlementDetails ? (details.settlementDateFinal || (seedSettlementDetails ? '2026-03-31' : '')) : '',
     amount: hydrateSettlementDetails ? (stripMxnLabel(details.amount) || (seedSettlementDetails ? stripMxnLabel(totalWithCurrency) : '')) : '',
-    currency: hydrateSettlementDetails ? (details.currency || 'MXN') : '',
+    currency: hydrateSettlementDetails || context.mode === 'settlement_form' ? (details.currency || instrumentCurrency) : '',
     fee: hydrateSettlementDetails ? (stripMxnLabel(details.fee) || (seedSettlementDetails ? '900' : '')) : '',
     netAmount: hydrateSettlementDetails ? (stripMxnLabel(details.netAmount) || (seedSettlementDetails ? stripMxnLabel(totalWithCurrency) : '')) : '',
     custodianReference: hydrateSettlementDetails ? (details.custodianReference || '') : '',
@@ -475,16 +477,16 @@ function stripMxnLabel(value) {
   var raw = String(value || '').trim();
   if (!raw) return '';
   if (raw.indexOf('$') === 0) return raw.slice(1).trim();
+  if (raw.indexOf('USD') === 0) return raw.slice(3).trim();
   if (raw.indexOf('MXN ') === 0) return raw.slice(4).trim();
   if (raw.indexOf('MXN') === 0) return raw.slice(3).trim();
   return raw;
 }
 
-function formatMxnDisplay(value) {
+function formatMxnDisplay(value, currency = 'MXN') {
   var raw = String(value || '').trim();
   if (!raw) return '';
-  var normalized = normalizeMxnLabel(raw);
-  return normalized === raw ? ('MXN ' + raw) : normalized;
+  return currency + ' ' + stripMxnLabel(raw);
 }
 
 function App() {
@@ -492,6 +494,7 @@ function App() {
   const [mode, setModeState] = React.useState(initialContext.mode);
   const [tradeStatus, setTradeStatus] = React.useState(initialContext.status);
   const [form, setForm] = React.useState(() => buildInitialForm(initialContext));
+  const instrumentInfo = SecurityTradeData.instrumentInfo(form.instrument);
   const [formError, setFormError] = React.useState('');
   const portfolios = PortfolioStore.list();
   const portfolioOptions = portfolios.filter(item => SecurityTradeData.eligible(item, form.tradeType))
@@ -500,7 +503,7 @@ function App() {
   const inventory = HoldingsLedger.project(currentTrades.filter(row => row.ticket !== initialContext.ticket));
   const availablePosition = inventory.positions.find(row => row.portfolioId === form.portfolioId && row.instrument === form.instrument);
   const availableQuantity = availablePosition?.open || 0;
-  const instrumentOptions = Array.from(new Set(INSTRUMENT_OPTIONS.concat(currentTrades.map(row => row.instrumentCode).filter(Boolean))));
+  const instrumentOptions = Array.from(new Set(INSTRUMENT_OPTIONS.concat(SecurityTradeData.tbills, currentTrades.map(row => row.instrumentCode).filter(Boolean))));
   const selectableInstruments = form.tradeType === 'sell'
     ? instrumentOptions.filter(code => inventory.positions.some(row => row.instrument === code && row.open > 0 && (!form.portfolioId || row.portfolioId === form.portfolioId)))
     : instrumentOptions;
@@ -539,7 +542,7 @@ function App() {
     if (nextMode === 'settlement_form') {
       setForm(function(prev) {
         if (String(prev.currency || '').trim()) return prev;
-        return { ...prev, currency: 'MXN' };
+        return { ...prev, currency: SecurityTradeData.instrumentInfo(prev.instrument).currency };
       });
     }
     setModeState(nextMode);
@@ -571,6 +574,10 @@ function App() {
       }
       if (['instrument', 'rate', 'tradeDate', 'term'].includes(key)) {
         next.price = SecurityTradeData.calculatePrice(next);
+      }
+      if (key === 'instrument') {
+        next.instrumentType = inferInstrumentType(value);
+        if (next.currency) next.currency = SecurityTradeData.instrumentInfo(value).currency;
       }
       return next;
     });
@@ -734,7 +741,7 @@ function buildTradeRow(statusValue, modeValue, readonlyValue) {
 
   const hasAmountInputs = Boolean(String(form.quantity || '').trim()) && Boolean(String(form.price || '').trim());
   const sumLabel = hasAmountInputs
-    ? 'MXN ' + formatMoney(Number(String(form.quantity).replace(/,/g, '')) * Number(String(form.price || '0').replace(/,/g, '')))
+    ? instrumentInfo.currency + ' ' + formatMoney(Number(String(form.quantity).replace(/,/g, '')) * Number(String(form.price || '0').replace(/,/g, '')))
     : '';
   const tradeTypeBadge = <TradeTypeBadge value={form.tradeType} />;
 
@@ -756,7 +763,7 @@ function buildTradeRow(statusValue, modeValue, readonlyValue) {
   const howMuchRows = [
     { label: 'Quantity', value: form.quantity || '—' },
     { label: 'Rate', value: form.rate ? form.rate + '%' : '—' },
-    { label: 'Price', value: form.price ? 'MXN ' + form.price : '—' },
+    { label: 'Price', value: form.price ? instrumentInfo.currency + ' ' + form.price : '—' },
     { label: 'Sum', value: hasAmountInputs ? sumLabel : '—' },
   ];
   const accountingRows = [
@@ -776,10 +783,10 @@ function buildTradeRow(statusValue, modeValue, readonlyValue) {
     { label: 'Bank reference', value: form.bankReference || '—' },
     { label: 'Settlement account', value: form.settlementAccount || '—' },
     { label: 'Settlement date', value: form.settlementDateFinal || '—' },
-    { label: 'Amount', value: formatMxnDisplay(form.amount) || '—' },
+    { label: 'Amount', value: formatMxnDisplay(form.amount, form.currency || instrumentInfo.currency) || '—' },
     { label: 'Currency', value: form.currency || '—' },
-    { label: 'Fee', value: formatMxnDisplay(form.fee) || '—' },
-    { label: 'Net amount', value: formatMxnDisplay(form.netAmount) || '—' },
+    { label: 'Fee', value: formatMxnDisplay(form.fee, form.currency || instrumentInfo.currency) || '—' },
+    { label: 'Net amount', value: formatMxnDisplay(form.netAmount, form.currency || instrumentInfo.currency) || '—' },
     { label: 'Custodian reference', value: form.custodianReference || '—' },
   ];
   const moReconciliationRows = [
@@ -895,7 +902,7 @@ function buildTradeRow(statusValue, modeValue, readonlyValue) {
   const headerActions = null;
 
   const editSections = (
-    <SecurityTradeForm flashKeys={flashKeys} form={form} updateField={updateField} INSTRUMENT_OPTIONS={selectableInstruments} COUNTERPARTY_OPTIONS={COUNTERPARTY_OPTIONS} PORTFOLIO_OPTIONS={portfolioOptions} CUSTODIAN_OPTIONS={CUSTODIAN_OPTIONS} EXECUTION_METHOD_OPTIONS={EXECUTION_METHOD_OPTIONS} TERM_OPTIONS={TERM_OPTIONS} hasAmountInputs={hasAmountInputs} formatMoney={formatMoney} STRATEGY_OPTIONS={STRATEGY_OPTIONS} availableQuantity={availableQuantity} />
+    <SecurityTradeForm flashKeys={flashKeys} form={form} updateField={updateField} INSTRUMENT_OPTIONS={selectableInstruments} COUNTERPARTY_OPTIONS={COUNTERPARTY_OPTIONS} PORTFOLIO_OPTIONS={portfolioOptions} CUSTODIAN_OPTIONS={CUSTODIAN_OPTIONS} EXECUTION_METHOD_OPTIONS={EXECUTION_METHOD_OPTIONS} TERM_OPTIONS={TERM_OPTIONS} hasAmountInputs={hasAmountInputs} formatMoney={formatMoney} STRATEGY_OPTIONS={STRATEGY_OPTIONS} availableQuantity={availableQuantity} instrumentCurrency={instrumentInfo.currency} instrumentNominal={instrumentInfo.nominal} />
   );
 
   const reviewSections = (
@@ -1033,7 +1040,7 @@ function buildTradeRow(statusValue, modeValue, readonlyValue) {
     );
   } else if (mode === 'settlement_form') {
     rightColumn = (
-      <TradeSettlementForm showReviewerCommentTile={showReviewerCommentTile} reviewerComment={reviewerComment} form={form} updateField={updateField} formatMoney={formatMoney} setMode={setMode} />
+      <TradeSettlementForm showReviewerCommentTile={showReviewerCommentTile} reviewerComment={reviewerComment} form={form} updateField={updateField} formatMoney={formatMoney} setMode={setMode} instrumentCurrency={instrumentInfo.currency} />
     );
   } else if (mode === 'settlement_review') {
     rightColumn = (

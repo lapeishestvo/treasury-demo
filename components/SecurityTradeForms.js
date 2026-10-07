@@ -102,12 +102,12 @@
       mask: "amount"
     }), React.createElement(ReadonlyField, {
       label: "Price",
-      value: form.price ? 'MXN ' + form.price : '—',
+      value: form.price ? props.instrumentCurrency + ' ' + form.price : '—',
       fluid: true,
-      help: 'Demo calculation: 10 / (1 + Rate / 100 × days to maturity / 360). Settlement must not be after maturity.'
+      help: 'Demo calculation: ' + props.instrumentNominal + ' / (1 + Rate / 100 × days to maturity / 360). Settlement must not be after maturity.'
     })), React.createElement(InlineFields, null, React.createElement(ReadonlyField, {
       label: "Sum",
-      value: hasAmountInputs ? 'MXN ' + formatMoney(Number(String(form.quantity).replace(/,/g, '')) * Number(String(form.price || '0').replace(/,/g, ''))) : '—',
+      value: hasAmountInputs ? props.instrumentCurrency + ' ' + formatMoney(Number(String(form.quantity).replace(/,/g, '')) * Number(String(form.price || '0').replace(/,/g, ''))) : '—',
       fluid: true,
       help: 'Quantity multiplied by Price.'
     }))), React.createElement(Section, {

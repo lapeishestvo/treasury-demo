@@ -59,4 +59,18 @@ function BadgeCell(props) {
   }, props.children);
 }
 
-Object.assign(window, { Td, TextCell, BadgeCell });
+function MoneyCell(props) {
+  var T = AuraTokens;
+  var known = typeof props.value === 'number' && Number.isFinite(props.value);
+  return React.createElement('div', { style: {
+    display: 'flex', justifyContent: 'flex-end', gap: 2, width: '100%', minWidth: 0,
+    fontFamily: T.font.family, fontSize: T.font.size['body/md'],
+    lineHeight: T.font.lineHeight['body/md'] + 'px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+  } },
+    known && props.currency ? React.createElement('span', { style: { color: T.colors.tigNeutralSecondary } }, props.currency) : null,
+    React.createElement('span', { style: { color: known ? T.colors.tigNeutralPrimary : T.colors.tigNeutralTertiary, overflow: 'hidden', textOverflow: 'ellipsis' } },
+      known ? props.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '\u2014')
+  );
+}
+
+Object.assign(window, { Td, TextCell, BadgeCell, MoneyCell });

@@ -11,7 +11,7 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 <script src="components/AuraTokens.js"></script>
 <script src="components/Badge.js?v=positions-1"></script>
-<script src="components/AssetIcon.js"></script>
+<script src="components/AssetIcon.js?v=icons-2"></script>
 <script src="components/ColHeader.js?v=positions-1"></script>
 <script src="components/TableCell.js?v=positions-2"></script>
 <script src="components/Chip.js?v=positions-1"></script>
@@ -20,18 +20,20 @@
 <script src="components/FilterDropdown.js"></script>
 <script src="components/SideMenu.js?v=positions-1"></script>
 <script src="components/Island.js"></script>
-<script src="components/UiPrimitives.js?v=positions-1"></script>
+<script src="components/UiPrimitives.js?v=icons-2"></script>
 <script src="components/ToolbarIcons.js"></script>
 <script src="components/SearchBar.js?v=positions-1"></script>
 <script src="components/TableLayout.js"></script>
 <script src="components/FilterChip.js?v=positions-1"></script>
 <script src="components/ChoiceChip.js"></script>
-<script src="components/PositionTable.js?v=positions-2"></script>
+<script src="components/InputField.js?v=date-range-1"></script>
+<script src="components/DateRangeFilter.js?v=1"></script>
+<script src="components/PositionTable.js?v=positions-3"></script>
 <script src="PortfolioData.js?v=liquidity-2"></script>
 <script src="SecurityTradeData.js?v=tbills-1"></script>
 <script src="HoldingsLedger.js?v=tbills-1"></script>
 <script src="TradeStore.js?v=liquidity-2"></script>
-<script src="PositionData.js?v=tbills-3"></script>
+<script src="PositionData.js?v=date-range-1"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -48,7 +50,7 @@ function App() {
   const [loadError, setLoadError] = React.useState('');
   const [groupBy, setGroupBy] = React.useState('portfolio');
   const [query, setQuery] = React.useState('');
-  const [maturityDates, setMaturityDates] = React.useState([]);
+  const [maturityRange, setMaturityRange] = React.useState({ from: '', to: '' });
   const [openMenu, setOpenMenu] = React.useState(null);
   const [sort, setSort] = React.useState(null);
   React.useEffect(() => {
@@ -65,8 +67,7 @@ function App() {
     window.addEventListener('storage', refresh);
     return () => { window.removeEventListener('pageshow', refresh); window.removeEventListener('storage', refresh); };
   }, []);
-  const dates = Array.from(new Set(positions.map(row => row.maturityDate))).sort().map(date => ({ key: date, label: date }));
-  const groups = PositionStore.group(PositionStore.filter(positions, query, maturityDates), groupBy, sort);
+  const groups = PositionStore.group(PositionStore.filter(positions, query, maturityRange), groupBy, sort);
   function sortBy(key) {
     setSort(previous => previous?.key !== key ? { key, dir: 'asc' } : previous.dir === 'asc' ? { key, dir: 'desc' } : null);
   }
@@ -78,19 +79,18 @@ function App() {
           <Island gap={4} background={AuraTokens.colors.bgNeutralBase}>
             <ToolbarTile minHeight={80} scrollable={true}>
               <PageTitle label="Positions" /><FlexSpacer />
-              <SearchBar label="Search positions" value={query} onChange={setQuery} icon={<AssetIcon src="assets/icons/position-search.svg" size={16} />} />
-              <PrimaryActionButton label="New trade" iconSize={20} icon={<AssetIcon src="assets/icons/lot-add.svg" size={20} naturalSize={20} />}
+              <SearchBar label="Search positions" value={query} onChange={setQuery} icon={<AssetIcon src="assets/icons/position-search-glyph.svg" size={16} naturalSize={16} offsetX={0.25} offsetY={0.25} />} />
+              <PrimaryActionButton label="New trade" iconSize={20} icon={<AssetIcon src="assets/icons/position-add-glyph.svg" size={20} naturalSize={20} />}
                 onClick={() => window.location.href = 'Trade.html?mode=edit'} />
             </ToolbarTile>
             <ToolbarTile minHeight={80} scrollable={true}>
               <ChoiceChip label={'Group by ' + groupBy} options={GROUP_OPTIONS} value={groupBy}
-                icon={<AssetIcon src="assets/icons/position-group.svg" size={16} naturalSize={16} />}
-                chevronElement={<AssetIcon src="assets/icons/position-chip-chevron.svg" size={16} naturalSize={16} />}
+                icon={<AssetIcon src="assets/icons/position-group-glyph.svg" size={16} naturalSize={16} />}
+                chevronElement={<AssetIcon src="assets/icons/position-chip-chevron-glyph.svg" size={16} naturalSize={16} offsetY={2/3} />}
                 open={openMenu === 'group'} onOpenChange={open => setOpenMenu(open ? 'group' : null)} onChange={setGroupBy} />
-              <FilterChip label="Maturity date" options={dates} selectedKeys={maturityDates} onChange={setMaturityDates}
-                gap={4} chevronElement={<AssetIcon src="assets/icons/position-chip-chevron.svg" size={16} naturalSize={16} />}
+              <DateRangeFilter label="Maturity date" value={maturityRange} onChange={setMaturityRange}
                 open={openMenu === 'maturity'} onOpenChange={open => setOpenMenu(open ? 'maturity' : null)} />
-              {maturityDates.length || query ? <TextActionButton label="Clear all" icon={<CloseIcon16 />} onClick={() => { setMaturityDates([]); setQuery(''); }} /> : null}
+              {maturityRange.from || maturityRange.to || query ? <TextActionButton label="Clear all" icon={<CloseIcon16 />} onClick={() => { setMaturityRange({ from: '', to: '' }); setQuery(''); }} /> : null}
             </ToolbarTile>
           </Island>
           {loadError ? <EmptyState label={loadError} /> : <PositionTable key={groupBy} groupBy={groupBy} groups={groups} sort={sort} onSort={sortBy} />}

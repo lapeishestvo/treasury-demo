@@ -51,8 +51,9 @@ function ConfirmationDialog(props) {
         React.createElement(BtnL, { label: props.confirmLabel || 'Delete', variant: 'negative', onClick: props.onConfirm, disabled: props.busy })
       ),
       React.createElement('button', { type: 'button', 'aria-label': props.closeLabel || 'Close', title: props.closeLabel || 'Close', disabled: props.busy, onClick: props.onCancel,
-        style: { position: 'absolute', top: 19, right: 19, width: 40, height: 40, padding: 12, border: 'none', borderRadius: 12, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
-        React.createElement('img', { src: 'assets/icons/dialog-close.svg', alt: '', style: { flexShrink: 0 } })
+        style: { position: 'absolute', top: 20, right: 20, width: 40, height: 40, padding: 12, border: 'none', borderRadius: 12, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+        React.createElement('span', { style: { width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } },
+          React.createElement('img', { src: 'assets/icons/dialog-close-glyph.svg', alt: '', style: { display: 'block', flexShrink: 0 } }))
       )
     )
   ), document.body);

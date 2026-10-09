@@ -63,24 +63,23 @@
     var group = props.group;
     var visible = showAll ? group.rows : group.rows.slice(0, 4);
     return React.createElement(Island, { gap: 0, style: { flexShrink: 0, overflow: 'clip' } },
-      React.createElement('div', { 'data-position-group': group.id, style: { position: 'relative' } },
+      React.createElement('div', { 'data-position-group': group.id, role: expanded ? 'table' : undefined,
+        'aria-label': group.label + ' positions', style: { position: 'relative' } },
         React.createElement('div', { style: { position: 'sticky', top: 0, zIndex: 3 } },
           React.createElement(PositionGroupHeader, { label: group.label, count: group.rows.length, quantity: group.total.quantity,
-            expanded: expanded, contentId: contentId, onToggle: function() { setExpanded(!expanded); } })
-        ),
-        expanded ? React.createElement('div', { id: contentId, role: 'table', 'aria-label': group.label + ' positions' },
-          React.createElement('div', { role: 'rowgroup', style: { position: 'sticky', top: 60, zIndex: 2, background: T.colors.bgNeutralPrimary } },
+            expanded: expanded, contentId: contentId, onToggle: function() { setExpanded(!expanded); } }),
+          expanded ? React.createElement('div', { role: 'rowgroup', style: { background: T.colors.bgNeutralPrimary } },
             React.createElement('div', { role: 'row', style: { display: 'flex', height: 40 } }, props.columns.map(function(column, index) {
               return React.createElement(ColHeader, { key: column.key, label: column.label, width: column.width,
                 first: index === 0, align: column.numeric ? 'right' : 'left', compact: true,
                 sortable: column.sortable, sortKey: column.key, sortState: props.sort, onSort: props.onSort,
                 sortIcon: 'assets/icons/position-sort.svg' });
             }))
-          ),
-          React.createElement('div', { role: 'rowgroup' }, visible.map(function(row) {
+          ) : null
+        ),
+        expanded ? React.createElement('div', { id: contentId, role: 'rowgroup' }, visible.map(function(row) {
             return React.createElement(PositionTableRow, { key: row.id, row: row, columns: props.columns });
-          }))
-        ) : null,
+          })) : null,
         expanded && group.rows.length > 4 ? React.createElement('button', {
           type: 'button', 'aria-expanded': showAll, onClick: function() { setShowAll(!showAll); },
           style: { display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 48, padding: '0 22px',

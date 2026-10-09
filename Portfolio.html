@@ -12,13 +12,13 @@
 <script src="components/Badge.js"></script>
 <script src="components/TopBar.js"></script>
 <script src="components/Island.js"></script>
-<script src="components/UiPrimitives.js?v=portfolio-actions-2"></script>
+<script src="components/UiPrimitives.js?v=icons-2"></script>
 <script src="components/FormPageHeader.js?v=portfolio-actions-2"></script>
 <script src="components/AuraStepper.js?v=portfolio-actions-2"></script>
 <script src="components/ReviewRow.js"></script>
 <script src="components/FormSection.js?v=portfolio-actions-2"></script>
-<script src="components/ButtonStack.js?v=portfolio-active-1"></script>
-<script src="components/ConfirmationDialog.js?v=portfolio-active-1"></script>
+<script src="components/ButtonStack.js?v=icons-2"></script>
+<script src="components/ConfirmationDialog.js?v=icons-2"></script>
 <script src="components/InputField.js"></script>
 <script src="components/SelectField.js"></script>
 <script src="components/TextareaField.js"></script>
@@ -207,12 +207,13 @@ function App() {
           header={width => <FormPageHeader title={title} subtitle={subtitle} status={record?.status} statusVariant={PortfolioStore.statusVariants[record?.status]} statusAtEnd={true} width={width} height={92} backButtonSize={48} onBack={() => mode === 'review' ? setMode('edit') : backToList()} />}
           nav={<AuraStepper steps={steps} activeAnchor={activeAnchor} onStepClick={selectStep} disableAutoScroll={true} fillHeight={true}
             footer={isReturned && mode === 'detail' ? <ButtonStack size="m" buttons={[
-              { label: 'Edit', variant: 'secondary', iconSrc: 'assets/icons/edit.svg', onClick: () => { setError(''); setMode('edit'); } },
-              { label: 'Delete', variant: 'secondary', iconSrc: 'assets/icons/trash.svg', iconOnly: true, onClick: () => { setDeleteError(''); setDeleteOpen(true); } },
+              { label: 'Edit', variant: 'secondary', iconSrc: 'assets/icons/edit-glyph.svg', iconNaturalSize: 20, onClick: () => { setError(''); setMode('edit'); } },
+              { label: 'Delete', variant: 'secondary', iconSrc: 'assets/icons/trash-glyph.svg', iconNaturalSize: 20, iconOnly: true, onClick: () => { setDeleteError(''); setDeleteOpen(true); } },
             ]} /> : restoreAction && mode === 'detail' ? <ButtonStack size="m" buttons={[
               { label: restoreAction, variant: 'ghost', disabled: changingStatus, onClick: restorePortfolio },
             ]} /> : activeAction && mode === 'detail' ? <ButtonStack size="m" buttons={[
-              { label: activeAction, variant: 'ghost', iconSrc: activeAction === 'Block' ? 'assets/icons/block.svg' : 'assets/icons/close-portfolio.svg',
+              { label: activeAction, variant: 'ghost', iconSrc: activeAction === 'Block' ? 'assets/icons/block-glyph.svg' : 'assets/icons/close-portfolio.svg',
+                iconNaturalSize: activeAction === 'Block' ? 20 : 24,
                 onClick: () => { setActiveError(''); setActiveDialog(activeAction); } },
             ]} /> : null} />}
           main={<IslandColumn colRef={scrollRef}

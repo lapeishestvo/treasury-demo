@@ -85,7 +85,7 @@ function BtnL(props) {
       transition: 'background 0.12s',
     },
   }, props.iconSrc ? React.createElement('span', { style: { width: iconSize, height: iconSize, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } },
-      React.createElement('img', { src: props.iconSrc, alt: '', style: { flexShrink: 0, transform: 'scale(' + (iconSize / (props.iconNaturalSize || 24)) + ')' } })) : null,
+      React.createElement('img', { src: props.iconSrc, alt: '', style: { display: 'block', flexShrink: 0, transform: 'scale(' + (iconSize / (props.iconNaturalSize || 24)) + ')' } })) : null,
     props.iconOnly ? null : label);
 }
 

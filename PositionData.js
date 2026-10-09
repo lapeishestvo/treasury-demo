@@ -33,7 +33,11 @@
     return rows.filter(function(row) {
       return (!text || [row.instrument, row.portfolio, row.book, row.currency, row.maturityDate].some(function(value) {
         return value.toLowerCase().includes(text);
-      })) && (!maturityDates || !maturityDates.length || maturityDates.includes(row.maturityDate));
+      })) && (!maturityDates || (Array.isArray(maturityDates)
+        ? !maturityDates.length || maturityDates.includes(row.maturityDate)
+        : ((!maturityDates.from && !maturityDates.to) || (!!row.maturityDate &&
+          (!maturityDates.from || row.maturityDate >= maturityDates.from) &&
+          (!maturityDates.to || row.maturityDate <= maturityDates.to)))));
     });
   }
   function group(rows, groupBy, sort) {

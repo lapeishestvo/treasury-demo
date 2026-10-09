@@ -99,8 +99,8 @@ function PrimaryActionButton(props) {
             src: icon,
             alt: '',
             style: {
-              width: 16,
-              height: 16,
+              width: props.iconSize || 16,
+              height: props.iconSize || 16,
               display: 'block',
               filter: 'brightness(0) invert(1)',
             },

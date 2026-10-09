@@ -44,6 +44,7 @@ function InputField(props) {
   var prefix   = props.prefix;
   var mask     = props.mask;
   var T = AuraTokens;
+  var fieldFontSize = props.fontSize || T.font.size['body/md'];
   var labelText = String(label || '');
   var dateMask = mask === 'date' || (!mask && /\bdate\b/i.test(labelText) && !/\btime\b/i.test(labelText));
   var timeMask = mask === 'time' || (!mask && /\btime\b/i.test(labelText) && !/\bdate\b/i.test(labelText));
@@ -56,7 +57,8 @@ function InputField(props) {
   var focusState = React.useState(false);
   var focused = focusState[0];
   var setFocused = focusState[1];
-  var raised = hasValue || focused;
+  var raised = !props.hideLabel && (hasValue || focused);
+  var showMask = masked && (raised || props.hideLabel);
 
   return React.createElement('div', {
     'data-stepper-field': 'true',
@@ -71,6 +73,7 @@ function InputField(props) {
       flexDirection: 'column',
       justifyContent: 'center',
       padding: '0 16px',
+      paddingRight: props.trailing ? 52 : 16,
       position: 'relative',
       boxShadow: focused ? ('inset 0 0 0 2px ' + T.colors.borderNeutralPrimary) : 'none',
       transition: 'box-shadow 0.12s',
@@ -115,7 +118,7 @@ function InputField(props) {
         style: {
           flexShrink: 0,
           fontFamily: T.font.family,
-          fontSize: T.font.size['body/md'],
+          fontSize: fieldFontSize,
           fontWeight: T.font.weightBody,
           color: T.colors.tigNeutralPrimary,
           lineHeight: T.font.lineHeight['body/md'] + 'px',
@@ -129,7 +132,8 @@ function InputField(props) {
           height: T.font.lineHeight['body/md'] + 'px',
         },
       },
-        masked && raised ? React.createElement('span', {
+        showMask ? React.createElement('span', {
+          'aria-hidden': true,
           style: {
             position: 'absolute',
             left: 0,
@@ -137,7 +141,7 @@ function InputField(props) {
             top: 0,
             height: T.font.lineHeight['body/md'] + 'px',
             fontFamily: T.font.family,
-            fontSize: T.font.size['body/md'],
+            fontSize: fieldFontSize,
             fontWeight: T.font.weightBody,
             lineHeight: T.font.lineHeight['body/md'] + 'px',
             pointerEvents: 'none',
@@ -153,7 +157,7 @@ function InputField(props) {
             style: { color: T.colors.tigNeutralTertiary },
           }, maskPlaceholderTail) : null
         ) : null,
-        !raised ? React.createElement('span', {
+        !raised && !props.hideLabel ? React.createElement('span', {
           style: {
             position: 'absolute',
             left: 0,
@@ -173,6 +177,8 @@ function InputField(props) {
         }, label) : null,
         React.createElement('input', {
           'aria-label': label,
+          'aria-invalid': props.invalid || undefined,
+          'aria-describedby': props.describedBy,
           type: 'text', value: displayValue, readOnly: !!readOnly,
           inputMode: masked ? 'numeric' : (amountMask ? 'decimal' : undefined),
           maxLength: dateMask ? 10 : (timeMask ? 5 : undefined),
@@ -180,13 +186,13 @@ function InputField(props) {
             onChange(dateMask ? formatInputDateMask(e.target.value) : (timeMask ? formatInputTimeMask(e.target.value) : (amountMask ? formatInputAmountMask(e.target.value) : e.target.value)));
           } : undefined,
           onFocus: function() { setFocused(true); },
-          onBlur: function() { setFocused(false); },
+          onBlur: function() { setFocused(false); if (props.onBlur) props.onBlur(); },
           style: {
             width: '100%',
             background: 'none', border: 'none', outline: 'none',
             fontFamily: T.font.family,
-            fontSize: T.font.size['body/md'],
-            color: masked && raised ? 'transparent' : T.colors.tigNeutralPrimary,
+            fontSize: fieldFontSize,
+            color: showMask ? 'transparent' : T.colors.tigNeutralPrimary,
             caretColor: T.colors.tigNeutralPrimary,
             lineHeight: T.font.lineHeight['body/md'] + 'px',
             height: T.font.lineHeight['body/md'] + 'px',
@@ -197,7 +203,8 @@ function InputField(props) {
         })
       )
       )
-    )
+    ),
+    props.trailing ? React.createElement('span', { style: { position: 'absolute', right: 16, top: 12, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, props.trailing) : null
   );
 }
 

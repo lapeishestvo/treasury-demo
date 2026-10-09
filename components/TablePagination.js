@@ -23,6 +23,7 @@
       return React.createElement('button', { type: 'button', 'aria-label': label, title: label, disabled: disabled,
         onClick: function() { props.onChange(target); },
         style: { width: 40, height: 40, padding: 12, border: 0, background: 'transparent',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           borderRadius: T.radii.sm, flexShrink: 0, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 },
       }, React.createElement(AssetIcon, { src: icon, size: 16, naturalSize: 24 }));
     }

@@ -198,18 +198,31 @@ function PageWorkspace(props) {
   var T = AuraTokens;
 
   return React.createElement('div', {
+    className: 'aura-workspace-scroll',
     style: {
       flex: 1,
       display: 'flex',
-      gap: gap,
-      padding: padding,
       overflowX: 'auto',
       overflowY: 'hidden',
-      justifyContent: justifyContent,
       minHeight: 0,
       background: T.colors.bgNeutralBase,
     },
-  }, children);
+  }, React.createElement('div', {
+    className: 'aura-workspace-content',
+    style: {
+      display: 'flex',
+      width: '100%',
+      minWidth: T.layout.contentMinWidth,
+      maxWidth: T.layout.contentMaxWidth,
+      flexShrink: 0,
+      minHeight: 0,
+      boxSizing: 'border-box',
+      margin: '0 auto',
+      gap: gap,
+      padding: padding,
+      justifyContent: justifyContent,
+    },
+  }, children));
 }
 
 function StackColumn(props) {

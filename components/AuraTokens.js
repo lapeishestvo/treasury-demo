@@ -165,6 +165,8 @@ const AuraTokens = {
 
   // ── Layout system ──
   layout: {
+    contentMinWidth: 1280,
+    contentMaxWidth: 1536,
     islandRadius: 12,
     islandGap:     8,
     tileRadius:    0,
